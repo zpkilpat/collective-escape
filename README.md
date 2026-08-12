@@ -6,7 +6,7 @@ fixed-point iteration, the Monte Carlo validation, and the empirical
 identification from the sulphur molly field data.
 
 Zachary P. Kilpatrick, Department of Applied Mathematics, University of
-Colorado Boulder. `zpkilpat@colorado.edu`
+Colorado Boulder.
 
 ## Requirements
 
