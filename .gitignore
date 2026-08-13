@@ -1,0 +1,6 @@
+output/
+*.mat
+*.asv
+.DS_Store
+sciadv_adt8600_data_s1.csv
+sciadv_adt8600_data_s2.xlsx
