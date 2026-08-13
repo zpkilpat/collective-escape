@@ -95,6 +95,8 @@ Called by the figure scripts, not run directly.
 | `alpha_hat` | Eq. (13), discounting rate from two response rates at a pooling count |
 | `linf_ceiling` | Closed-form saturation ceiling `L_inf(N)` |
 | `fit_pool_mle` | Scale-free likelihood cross-check on the pooling count |
+| `dyad_cascade_analytic` | Closed-form dyad cascade probability and delay, Eqs. (S8) and (S11) |
+| `dyad_frontier_heuristic` | Dyad speed-accuracy frontier over the constant-alpha family |
 | `ddm_ig` | Inverse-Gaussian first-passage density, survival and hazard |
 | `igrnd` | Inverse-Gaussian variates, Michael-Schucany-Haas |
 | `wilson` | Wilson score interval |
