@@ -14,8 +14,7 @@ function [g, S, h] = fpt_moving(b, db, t, x0)
 %  a constant boundary AND for a linear moving boundary. A constant boundary
 %  alone cannot validate the kernel, since Psi(t,s) vanishes identically
 %  there for s > 0 and only the s = 0 term survives; the linear case is what
-%  pins the sign. Earlier drafts of the supplement carried
-%  g = -2 Psi + 2 int g Psi, which is wrong.
+%  pins the sign.
 %
 %  A drift-diffusion with time-varying drift mu(t) against a FIXED barrier
 %  theta maps here by y(t) = xi(t) - A(t), A(t) = int_0^t mu, giving the
@@ -31,13 +30,6 @@ function [g, S, h] = fpt_moving(b, db, t, x0)
 %     g       first-passage density on t
 %     S       survival, 1 - cumulative
 %     h       hazard g/S
-%
-%  CONSOLIDATION NOTE. This replaces three separate implementations that
-%  coexisted during development: fpt_moving_boundary.m, an earlier
-%  handle-only fpt_moving, and a local fpt() inside run_bayes_nagent.m. All
-%  three agreed algebraically (fpt_moving_boundary folded the minus sign into
-%  its kernel definition), but three copies of a primitive whose sign
-%  convention was once wrong is exactly the wrong thing to ship.
 %
 %  ZPK 2026
 

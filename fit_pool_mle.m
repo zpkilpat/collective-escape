@@ -14,11 +14,7 @@ function [Mhat, out] = fit_pool_mle(t, opts)
 %  WITH THE SCALE FREE THIS ESTIMATOR HAS NO ADVANTAGE. Recovery at n = 125
 %  is [10.1, 22.6] against [10.3, 22.5] for the moment ratio -- identical. A
 %  scale-free model can only be identified by scale-free features of the
-%  data, so the dimensionless ratio already extracts what there is. An
-%  earlier comparison showing a tighter likelihood interval was measuring a
-%  fixed timescale, not better estimation. The headline estimator is
-%  therefore the moment ratio via calib_pool; this function exists to
-%  confirm the two agree.
+%  data, so the dimensionless ratio already extracts what there is.
 %
 %  M is not a free parameter sitting alongside the threshold. Once M is
 %  chosen, the two response rates fix both the discounting rate and the

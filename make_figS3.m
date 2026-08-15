@@ -114,9 +114,7 @@ for i = 1:numel(Mtrue)
         % Neither estimator is drawn outside the range it is valid on. Past
         % the top of the calibration grid the moment ratio is extrapolating;
         % at the likelihood's search ceiling the value IS the ceiling, not an
-        % estimate. Both become NaN so the curve stops rather than flattens,
-        % which is what made the earlier version look as though the estimate
-        % saturated near 50.
+        % estimate.
         if Mimp(i,j) > max(Mgrid),           Mimp(i,j) = NaN; end
         if Mmle(i,j) > 0.98*P.Mmle_max,      Mmle(i,j) = NaN; end
     end
@@ -221,12 +219,6 @@ function x = poolsample_corr(M, th, a, n, c, dt, Tmax)
 %   Brownian) at drift 1-a against threshold th, so c is the correlation
 %   between accumulators WITHIN a trial. Simulated directly, since there is
 %   no closed form for the minimum of correlated first passages.
-%
-%   An earlier version multiplied all M passage times by a common lognormal
-%   shock. That is trial-level heterogeneity, not accumulator correlation --
-%   a "slow shoal today" effect -- and it deflates Mhat far more sharply
-%   (to 1.3 at c = 0.6, where the gap nearly closes). The two are separate
-%   concerns and should not be conflated; this function models the second.
 if nargin < 6 || isempty(dt),   dt   = 0.01; end
 if nargin < 7 || isempty(Tmax), Tmax = 80;   end
 M   = round(M);  ntr = max(round(n/M), 2000);

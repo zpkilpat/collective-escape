@@ -5,8 +5,7 @@ function varargout = calib_pool(varargin)
 %  M of interest. Measured spread across theta in [1,6] is 52% at M=5, 19% at
 %  M=10, 11% at M=14, 6% at M=20, 1.5% at M=40. Calibrating at an arbitrary
 %  theta therefore moves the estimate: theta=1 returns Mhat=14.7, theta=3.6
-%  returns 13.6. This is the source of the drift across earlier runs, and it
-%  is not Monte Carlo noise.
+%  returns 13.6.
 %
 %  The threshold is not free. Once M is chosen, the false alarm rate fixes it,
 %      theta_1(M) = -log(1 - (1-q)^(1/M)),

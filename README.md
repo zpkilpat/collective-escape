@@ -47,10 +47,10 @@ with a warning if they are absent.
 Both are Data S1 and S2 of Pacher et al., *Science Advances* **11**, eadt8600
 (2025). Download them from that paper's archive into the working directory.
 
-Two features of Data S1 that the loaders handle. The header sits on line 20
-beneath nineteen lines of legend, the file is semicolon-delimited, and a
-second stacked block below the real data must be dropped. And `t_first` is
-recorded in video frames at 25 fps, not seconds.
+Three features of Data S1 that the loaders handle. The header sits on line 20
+beneath nineteen lines of legend and the file is semicolon-delimited. A second
+stacked block below the real data must be dropped. And `t_first` is recorded
+in video frames at 25 fps, not seconds.
 
 ---
 
@@ -80,6 +80,10 @@ struct of what they computed.
 | `make_figS5` | Fig. S5 | Data S1 |
 | `make_figS6` | Fig. S6 | Data S1 and S2 |
 
+`make_fig4` and `make_figS2` share one solve over
+`N = 2, 5, 10, 20, 40, 100` at `theta_1 = 3.5678`. Called with no argument,
+`make_figS2` performs that solve itself.
+
 ### Shared primitives
 
 Called by the figure scripts, not run directly.
@@ -105,11 +109,10 @@ Called by the figure scripts, not run directly.
 ### Validation, run by hand
 
 `validate_dyad_mc.m` checks the dyad observables against an independent
-Euler-Maruyama simulation sharing no code with the Volterra quadrature.
-Nothing calls it and it draws nothing by default, since the supplementary
-figure it once produced was cut. It is retained because the data-availability
-statement names the Monte Carlo validation and because the closed-form
-agreement it reproduces is quoted in the supplement.
+Euler-Maruyama simulation sharing no code with the Volterra quadrature. It is
+the Monte Carlo validation named in the data-availability statement, and the
+closed-form agreement it reproduces is quoted in the supplement. `run_all`
+does not call it and it draws nothing by default, so run it directly.
 
 ---
 
@@ -124,11 +127,12 @@ bootstrap: M in [8.82, 29.40], alpha in [0.906, 0.982]
            4000/4000 valid, P(alpha > L_inf) = 1.0000, min excess = 0.2043
 ```
 
-The cluster count is a guard, not a diagnostic. Both loaders assert it,
-because an earlier column-index error keyed clusters on the recording
-*location* rather than the recording *file*, giving 31 clusters with six
-carrying flybys and silently invalidating every clustered interval in the
-paper. If it prints anything but 73/47/26, stop.
+The cluster count is a guard, not a diagnostic. Clusters are keyed on the
+recording *file* combined with `bout_id`, since the bout index restarts within
+each recording; keying on the recording *location* instead collapses 73
+clusters to 31 with six carrying flybys, and every clustered interval in the
+paper rests on that key. Both loaders assert it. If it prints anything but
+73/47/26, stop.
 
 Three quantities in the paper are all called "the gap" and are not
 interchangeable:
@@ -148,24 +152,22 @@ before the resampling loop rather than at the top of the file, since
 
 ## Design notes
 
-**One first-passage primitive.** Three implementations of the same Volterra
-sweep coexisted during development, differing only in where the minus sign
-sat in the kernel. Since that sign convention was once wrong in the
-supplement, shipping three copies was the wrong call. `fpt_moving.m` accepts
-handles or vectors and is the only one; `survival_drift` and both fixed-point
+**One first-passage primitive.** `fpt_moving.m` accepts handles or vectors and
+is the only Volterra sweep in the repo. `survival_drift` and both fixed-point
 solvers route through it, so their self-tests exercise the same code every
-figure uses.
+figure uses. The kernel sign convention is the thing to leave alone: a
+constant boundary cannot validate it, since the kernel vanishes identically
+there for `s > 0`, so the linear moving boundary is what pins the sign.
 
-**Shared primitives extracted.** `linf_ceiling`, `igrnd`, `wilson` and
-`alpha_hat` were defined locally in up to six files each. One file apiece
-now, called everywhere.
+**Shared primitives are single-source.** `linf_ceiling`, `igrnd`, `wilson` and
+`alpha_hat` live in one file apiece and are called everywhere.
 
 **Illustrative thresholds in the expository figures.** `make_fig1` and
 `make_fig3` set their own thresholds rather than the fitted `theta_1`, since
 both exist to show mechanism at a scale where individual crossings are
 visible. The captions state the values used, and no number in the paper is
-read off those panels. Only `make_figS1` needed the fitted anchor, because
-its hump scaling runs through `theta_N`.
+read off those panels. Only `make_figS1` needed the fitted anchor, because its
+hump scaling runs through `theta_N`.
 
 **Small helpers left duplicated on purpose.** `igd`/`igpdf`, `ncdf`,
 `quantile_local`, `irls_logit`, the shape statistic, `assert_key`, and the
@@ -177,8 +179,7 @@ copies differ only in naming the loader each one guards.
 
 ## Known inconsistencies
 
-Documented rather than fixed, since the figures are verified as they stand
-and refactoring before submission would risk more than it buys.
+Documented rather than fixed. The figures are verified as they stand.
 
 **Two style systems.** `make_fig1`, `make_fig2`, `make_fig3` and `make_figS1`
 use `paper_style` with `apply_axes` and `export_panel`; the rest carry an
@@ -186,9 +187,10 @@ inline `P` struct with a local `export`. Both produce the same house style,
 22 by 19 cm with LaTeX interpreters throughout.
 
 **Two Data S1 loaders.** `make_fig5` parses the CSV itself; everything else
-calls `read_pacher`. They disagreed during development, 148 latencies against
-125, because one had not yet excluded the twenty-three answered flybys. Both
-are correct now and both assert the cluster key independently.
+calls `read_pacher`. Both assert the cluster key independently. The trap
+either one must avoid is the timing subset: `t_first` is non-empty on 23
+flybys as well as on the attacks, so the timing analysis selects attacks only
+and the correct count is 125, not 148.
 
 **Two fixed-point iterations.** `solve_lambda_fixedpoint` serves Fig. 3;
 `solve_bayes` serves Fig. 4 and Fig. S2. They differ in damping and in their

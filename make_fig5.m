@@ -6,13 +6,6 @@ function out = make_fig5(csvfile, opts)
 %   B  first-response-time distribution + M calibration   -- where the pooling count comes from
 %   C  alpha-hat(M) against the admissible optimum        -- the verdict
 %
-%   Replaces the earlier four-panel version. Old panel A (the
-%   alpha-hat - L_inf heatmap over (M,K)) is collapsed onto its own worst
-%   case: L_inf is increasing in K and K <= M, so the benchmark region at
-%   abscissa M is [0, L_inf(M)] and the gap is minimised on the upper edge.
-%   Old panel D (t_first vs area) moves to the supplement -- under file|bout
-%   clustering its slope CI crosses zero, so it is a sign check, not a bound.
-%
 %   Usage:  out = make_fig5('DataS1.csv');
 %           out = make_fig5('DataS1.csv', 'output');        % directory
 %           out = make_fig5('DataS1.csv', struct('nboot',1000));
@@ -46,8 +39,6 @@ function out = make_fig5(csvfile, opts)
 %   The calibration lives in calib_pool.m and is run at theta_1(M) at each
 %   grid point rather than at a fixed threshold, because lambda/Tbar is NOT
 %   threshold-free at this M (11% spread over theta in [1,6] at M = 14).
-%   That threshold dependence, not Monte Carlo noise, produced the drift
-%   across earlier runs.
 
 if nargin < 1 || isempty(csvfile), csvfile = find_datas1(); end
 if nargin < 2, opts = struct; end
@@ -133,10 +124,7 @@ D.clust  = clusterkey(nm, bout);   % see below
 % recordings), so the key must be file|bout rather than bout alone. That
 % gives 73 clusters, 47 carrying attacks and 26 carrying flybys. The NA
 % branch in clusterkey never fires on this dataset -- flybys DO carry bout
-% labels ('kk' 49 times, 'other' 32, otherwise '1' to '9'), contrary to an
-% earlier comment here -- and is kept only as a guard. The 83/47/17 triple
-% quoted in earlier drafts came from keying on location|bout, a
-% column-index error.
+% labels ('kk' 49 times, 'other' 32, otherwise '1' to '9').
 end
 
 function key = clusterkey(file, bout)
@@ -253,9 +241,7 @@ end
 
 function panelB(D, S, B, opts) %#ok<INUSL>
 %PANEL B  first-response-time distribution, with the calibration that turns
-%   it into M shown as an inset. The old version annotated Mhat on a bare
-%   histogram, so the reader had to take the identification on trust: nothing
-%   in a histogram displays lam/mean on a calibration grid.
+%   it into M shown as an inset.
 [f, ax] = newfig(opts, 'B');
 edges = 0:1:ceil(max(S.t));
 histogram(ax, S.t, edges, 'Normalization','pdf', ...

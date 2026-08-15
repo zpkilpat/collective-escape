@@ -26,9 +26,7 @@
 %  The caption must not declare theta_1 globally: it applies to D and E, and
 %  A's illustrative threshold has to be stated separately.
 %
-%  PANEL D HORIZON. Earlier versions stopped at t=8, which is t/theta = 2.4,
-%  i.e. BEFORE the plateau window [3.0,6.8]*theta in which the tail constant
-%  is measured, so the relaxation read as an unresolved transient. The axis
+%  PANEL D HORIZON. The axis
 %  now runs to TSHOW = 7*theta1, the top of that window, inside the solve
 %  horizon 8*theta1. The excess lambda - L_inf falls only as roughly 1/t, so
 %  a visually converged panel would need t ~ 30-50 theta and would be mostly
@@ -85,8 +83,7 @@ TSHOW_E = 8;             % E: decision-relevant window, NOT tied to TSHOW
 % error. L_inf is also theta-independent, which Panel F exploits. The window
 % mean is horizon-dependent besides: at theta1 = 3.5678 it reads 0.2153 over
 % [3,6.8]*theta while lambda is still falling at 7*theta. That window mean sits
-% 25% ABOVE L_inf and is the artifact retired from Fig. 4A -- never quote it as
-% a tail value. The extrapolated tail (solve_bayes) is 0.1636, 4.7% BELOW.
+% 25% ABOVE L_inf. The extrapolated tail (solve_bayes) is 0.1636, 4.7% BELOW.
 % The 2.7% / 8.4% pair is produced by validate_alpha_choice.m, NOT here; it
 % must be rerun at this anchor before those numbers are quoted.
 alpha_dyad = linf_ceiling(2);
@@ -265,7 +262,7 @@ text(axD, 0.62*TSHOW, alpha_dyad-0.035, sprintf('$L_\\infty(2) = %.2f$', alpha_d
 text(axD, 0.10*TSHOW, 0.55, 'single agent', 'Interpreter','latex', ...
      'FontSize',st.FSZ-12,'Color',st.col_ref);
 apply_axes(axD, 'time $t$', 'survival correction $\lambda(t)$');
-% ylim must contain the single-agent gap; an earlier version clipped it
+% ylim must contain the single-agent gap
 xlim(axD,[0 TSHOW]);  ylim(axD,[0 max(1.15*max(gap(t > 0.3)), 0.45)]);
 export_panel(fD, 'fig3D', outdir);
 
@@ -430,8 +427,7 @@ fprintf(' %+.1f%%', 100*(qB - qn_at_TB)./qn_at_TB);  fprintf('\n');
 
 % MATCHED-THRESHOLD comparison, which is a different claim from the frontier.
 % Sec. dyad says the Bayesian rule "cuts q_dyad by roughly a third" at fixed
-% theta; the frontier compares at matched T_(2) instead. This is the number
-% behind that sentence, and it was previously never computed here.
+% theta; the frontier compares at matched T_(2) instead.
 jB = find(abs(theta_B - theta1) < 1e-9, 1);
 jN = find(abs(theta_N - theta1) < 1e-9, 1);
 if ~isempty(jB) && ~isempty(jN)

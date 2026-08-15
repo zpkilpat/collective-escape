@@ -12,13 +12,6 @@ function out = make_figS5(csvfile, outdir)
 %     labels for rows carrying no bout. 73 clusters, 47 carrying attacks,
 %     26 carrying flybys.
 %
-%     The 83/47/17 triple quoted in earlier drafts came from keying on
-%     location|bout instead of file|bout, a column-index error. So did the
-%     claim that bout_id is NA on every flyby row: flybys carry their own
-%     labels, so the singleton branch almost never fires. Stratifying the
-%     resample by event type is still required, but for the ordinary reason
-%     that an unstratified draw can empty the flyby stratum.
-%
 %     Note the coincidence: there are 26 flyby-carrying clusters AND 26
 %     flyby responses out of 81. Unrelated quantities, same number.
 %

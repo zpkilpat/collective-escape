@@ -58,13 +58,7 @@ function out = validate_dyad_mc(sol, outdir, doplot)
 %  independent baseline q^2 and the saturating value 2q - q^2, and the
 %  collective time must exceed the group first-departure time. They are also
 %  checked against the reference values below wherever the threshold matches
-%  one of them. An earlier version of dyad_observables used S*exp(-gap) for
-%  G and the bare gap for C, ignoring the spread of the killed density; it
-%  disagreed with Monte Carlo by ~75 percent and passed unnoticed because
-%  nothing checked it. The reference values at theta = 0.8, 1.5, 2.3, 3.568
-%  are
-%      p_naive  = 0.4008, 0.1732, 0.0647, 0.0132
-%      T2_naive = 0.615,  1.077,  1.612,  2.507
+%  one of them.
 %
 %  ZPK 2026
 
@@ -230,9 +224,7 @@ end
 function [tdep, x] = runpair(mu, th, thK, s, bayesian, n, ns, dt, sq)
 %RUNPAIR  One Euler-Maruyama sweep of the coupled pair at drift mu.
 %   Both the drift and the noise are masked by alive, so an absorbed agent
-%   stops moving entirely; previously the drift was applied to dead agents
-%   too, which was harmless (they are never re-tested) but made the state
-%   after absorption meaningless.
+%   stops moving entirely.
 x = zeros(n,2); alive = true(n,2); tdep = inf(n,2);
 for k = 1:ns
     t = k*dt;
@@ -274,9 +266,6 @@ function b = dyad_observables(b)
 %   G is the survivor's onward crossing probability after the kick, obtained
 %   by integrating the killed density against exp(-max(theta-x-kappa,0)); C
 %   is its expected residual crossing time. Both have closed forms (below).
-%   An earlier version of this function used S*exp(-gap) for G and the bare
-%   gap for C, which ignore the spread of the killed density and disagreed
-%   with Monte Carlo by ~75 percent.
 %
 %   Naive rule: kappa = theta, constant, uncoupled marginals.
 %   Bayesian rule: kappa(t) = theta - Lambda_surv(t), and S, f come from the

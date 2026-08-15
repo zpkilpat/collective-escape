@@ -8,9 +8,7 @@ function [S, f, h] = survival_drift(mu, lambda_tot, theta, dt, nt)
 %   this into a driftless process against the moving boundary
 %       b(t) = theta - int_0^t (mu - lambda_tot) ds,
 %   which fpt_moving solves. Both hypotheses integrate FORWARD in the same
-%   physical-time direction -- the property the earlier backward-Kolmogorov
-%   implementation lacked, and the reason the saturation ceiling is a hazard
-%   balance rather than a discretization artifact.
+%   physical-time direction.
 %
 %   lambda_tot may be a scalar (constant discount, the heuristic) or an
 %   nt-vector (the Bayesian fixed point).

@@ -6,11 +6,6 @@ function L = linf_ceiling(N)
 %   The physical root of k(1-L)^2 = 4L.  L_inf(2) = 3 - 2*sqrt(2) ~ 0.1716;
 %   L_inf -> 1 as N -> inf, and slowly: 1 - L_inf ~ 2/sqrt(N-1).
 %
-%   SHAPE-PRESERVING. An earlier version began k = N(:) - 1, which flattened
-%   matrix input to a column and broke elementwise use against a meshgrid
-%   (the admissible-wedge heatmap in make_figS4). Output now matches the
-%   shape of N.
-%
 %   ZPK 2026
 k = N - 1;
 L = ((k + 2) - 2*sqrt(k + 1)) ./ max(k, eps);

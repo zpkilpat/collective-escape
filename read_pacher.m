@@ -61,9 +61,7 @@ D.tfirst = tf;
 
 % bout_id RESTARTS within each recording, so it must be combined with the
 % file column. Its values are '1'-'9' on attacks and 'kk' or 'other' on
-% flybys; it is NEVER the string NA, contrary to an earlier reading, so the
-% singleton branch below is defensive only and does not fire on this dataset.
-% Over 18 recordings the key file|bout gives 73 clusters, 47 carrying attacks
+% flybys. Over 18 recordings the key file|bout gives 73 clusters, 47 carrying attacks
 % and 26 carrying flybys.
 n = numel(nm); D.clust = cell(n,1); k = 0;
 for i = 1:n

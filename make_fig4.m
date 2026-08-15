@@ -164,7 +164,7 @@ set(axB(1),'XTickLabel',[]);                       % shared x-axis
 % only place seconds appear is Fig. 5, where the Pacher latencies set one.
 % The caption states the axis is truncated at 1.2*theta_1, so the label must
 % not promise a physical unit the abscissa does not carry.
-xlabel(axB(2),'time $t$','Interpreter','latex','FontSize',P.FSZ+6);
+xlabel(tl,'time $t$','Interpreter','latex','FontSize',P.FSZ+6);
 ylabel(tl,'first-departure density, $H=1$','Interpreter','latex','FontSize',P.FSZ+6);
 
 %  POST: top tile is alpha = 0 (naive), bottom is alpha = L_inf(N)
