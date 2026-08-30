@@ -76,9 +76,9 @@ struct of what they computed.
 | `make_figS1` | Fig. S1A, B | nothing |
 | `make_figS2` | Fig. S2A, B | `bayes` from `solve_bayes` |
 | `make_figS3` | Fig. S3A, B | nothing |
-| `make_figS4` | Fig. S4A–C | Data S1 |
+| `make_figS4` | Fig. S4A–C | nothing (simulation study) |
 | `make_figS5` | Fig. S5A–C | Data S1 |
-| `make_figS6` | Fig. S6A–C | nothing (simulation study) |
+| `make_figS6` | Fig. S6A–C | Data S1 |
 | `make_figS7` | Fig. S7A–C | Data S1 and S2 |
 
 ### Solvers and model code

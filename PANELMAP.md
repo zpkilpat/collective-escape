@@ -30,9 +30,9 @@ supplementary to four and seven without renaming panels inside the code.
 | Fig. S2A, S2B | `figS2A/B` | `make_figS2` | heuristic vs Bayesian fixed point |
 | Fig. S2C | `figS2C` | **`make_fig2`** (internal D) | converged dyad correction λ(t) |
 | Fig. S3A, S3B | `figS3A/B` | `make_figS3` | saturation ceiling, hump scaling |
-| Fig. S4A–C | `figS4A–C` | `make_figS4` | rate estimation and intervals |
+| Fig. S4A–C | `figS4A–C` | `make_figS4` | pooling-count robustness |
 | Fig. S5A–C | `figS5A–C` | `make_figS5` | over-discounting wedge |
-| Fig. S6A–C | `figS6A–C` | `make_figS6` | pooling-count robustness |
+| Fig. S6A–C | `figS6A–C` | `make_figS6` | rate estimation and intervals |
 | Fig. S7A–C | `figS7A–C` | `make_figS7` | area, headcount, density |
 
 Fig. S2C is emitted by `make_fig2` because it shares that script's dyad
@@ -44,5 +44,6 @@ sweep for one curve.
 Against the Science Advances version: old Fig. 2B → Fig. 1D; old Fig. 2A, 2C →
 Fig. S1; old Fig. 3B, 3C, 3E, 3F → Fig. 2A–D; old Fig. 3D → Fig. S2C; old
 Fig. 3A dropped; old Fig. 4 → Fig. 3; old Fig. 5 → Fig. 4 with the calibration
-inset promoted to a standalone panel C. Supplement: old S1 → S3, old S3 → S6,
-old S4 → S5, old S5 → S4, old S6 → S7, S2 unchanged.
+inset promoted to a standalone panel C. Supplement: old S1 → S3, old S3 → S4,
+old S4 → S6, old S5 → S5, old S6 → S7, S2 unchanged. (SI order is set by first
+mention in the main text; S4 and S6 were swapped again after that audit.)

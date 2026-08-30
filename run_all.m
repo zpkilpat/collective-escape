@@ -41,14 +41,14 @@ calib_pool('reset');          % start from a clean calibration
 t0 = tic;
 
 %% ---- theory panels needing no data -----------------------------------
-% make_figS6 sits here rather than with the empirical figures: it is a
+% make_figS4 sits here rather than with the empirical figures: it is a
 % simulation study of the calibration and reads no data file, so gating it on
 % the CSV would skip it for no reason.
 fprintf('\n===== Fig 1 (schematic B, C, survival LLR D) =====\n'); run_script('make_fig1');
 fprintf('\n===== Fig 2 (dyad) + Fig S2C =====\n');                 run_script('make_fig2');
 fprintf('\n===== Fig S1 (single-agent frontier) =====\n');         run_script('make_figS1');
 fprintf('\n===== Fig S3 (ceiling and hump) =====\n');              run_script('make_figS3');
-fprintf('\n===== Fig S6 (pooling-count robustness) =====\n');      out.figS6 = make_figS6(OUTDIR);
+fprintf('\n===== Fig S4 (pooling-count robustness) =====\n');      out.figS4 = make_figS4(OUTDIR);
 
 %% ---- the N-agent solve, then everything that reads it ----------------
 % NOTE the anchor is defined twice: here from the observed statistic, and
@@ -76,8 +76,8 @@ if ~exist(CSV,'file')
          'and S2 from the Pacher et al. archive; see README.md.'], CSV);
 else
     fprintf('\n===== Fig 4 =====\n');    out.fig4  = make_fig4(CSV, OUTDIR);
-    fprintf('\n===== Fig S4 =====\n');   out.figS4 = make_figS4(CSV, OUTDIR);
     fprintf('\n===== Fig S5 =====\n');   out.figS5 = make_figS5(CSV, OUTDIR);
+    fprintf('\n===== Fig S6 =====\n');   out.figS6 = make_figS6(CSV, OUTDIR);
     if exist(XLSX,'file')
         fprintf('\n===== Fig S7 =====\n');
         out.figS7 = make_figS7(CSV, XLSX, OUTDIR);
