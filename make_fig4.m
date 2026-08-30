@@ -1,353 +1,487 @@
-function out = make_fig4(bayes, outdir)
-%MAKE_FIG4  Fig. 4 as FOUR STANDALONE FIGURES, one per panel.
+function out = make_fig4(csvfile, opts)
+%MAKE_FIG4  Figure 4 for "Social discounting enables fast and reliable
+%           collective escape" -- four standalone panels off Pacher Data S1.
 %
-%  Writes fig4A, fig4B, fig4C, fig4D as .pdf and .png,
-%  each sized and typeset for standalone
-%  use, to be assembled externally.  Nothing is tiled.
+%   A  response rates vs shoal area (attacks vs flybys)  -- where the rates come from
+%   B  first-response-time distribution with the IG fit  -- the latency shape
+%   C  calibration of lambda_IG/Tbar against M           -- where the pooling count comes from
+%   D  alpha-hat(M) against the admissible optimum       -- the verdict
 %
-%  A  total survival drift (N-1)lambda^(N)(t) vs rescaled time, inset of the
-%     extrapolated tails against the closed form L_inf(N)
-%     -- REQUIRES the solver output from solve_bayes
-%  B  group first-departure density, two stacked tiles in one figure:
-%     naive over Bayesian at the self-consistent alpha = L_inf(N)
-%  C  group speed-accuracy Pareto frontier
-%  D  discounting rate REQUIRED to hold the false alarm rate, over (q_1, K)
+%   C was an inset inside B in the Science Advances version and was promoted to
+%   a standalone panel for PNAS; the old panel C became D. The scale-free
+%   statistic is written lambda_IG throughout to keep it clear of the survival
+%   correction lambda(t), a different quantity in the same paper.
 %
-%  Panels B, C, D are analytic and self-contained.  Panel A takes
-%      bayes(i).N  .t  .lam  .thetaN       (lam is PER-NEIGHBOUR lambda^(N))
-%  and is skipped if bayes = [].
+%   Usage:  out = make_fig4('DataS1.csv');
+%           out = make_fig4('DataS1.csv', 'output');        % directory
+%           out = make_fig4('DataS1.csv', struct('nboot',1000));
 %
-%  THRESHOLD (K = 1 anchor).  theta_1 = -log(q_1) is the SOLITARY threshold,
-%  so the solitary false alarm rate is exp(-theta_1) with no alpha in it.
-%  Holding the group rate there gives
-%      theta_N = (theta_1 + log N)/(1 + alpha),
-%  not theta_1 + log(N)/(1+alpha), which pinned to exp(-(1+alpha)*theta_1),
-%  the rate of an agent discounting neighbours it does not have.
+%   Reproduction targets (Aug 2026, self-consistent calibration):
+%       177 attacks / 127 responses     TP    = 0.7175
+%        81 flybys  /  26 responses     q_obs = 0.3210
+%       125 timings                     mean  = 4.92 s
+%       lam_IG/mean = 3.93 -> Mhat = 13.53     alpha-hat = 0.949
+%       q_1 = 0.0282     theta_1 = 3.568      K_max = 35.93
+%       L_inf(Mhat) = 0.573
+%       73 clusters, 47 attack / 26 flyby     4000 replicates, pOver = 1
+%       Mci = [8.825, 29.403]                 alphaci = [0.906, 0.982]
 %
-%  q_1 IS PER-UNIT, NOT THE GROUP RATE.  The observed q_N = 0.321 is the
-%  SHOAL-level false alarm rate, pooled over the M responders whose earliest
-%  crossing registers as a group response. The solitary rate is
-%      q_1 = 1 - (1-q_N)^(1/M) = 0.0282   at Mhat = 13.52,
-%  giving theta_1 = 3.5677. Earlier versions of this file used q_N directly,
-%  which set theta_1 = 1.1363 and made panels B, C, D the rate of a lone fish
-%  false-alarming a third of the time. Panel A was unaffected, since it reads
-%  the threshold from the solver struct rather than rebuilding it.
+%   THREE DIFFERENT GAPS, all correct, do not interchange them:
+%       0.376  alpha-hat - L_inf(Mhat) at the POINT ESTIMATE (panel C)
+%       0.204  min over the 4000 bootstrap replicates of alpha_b - L_inf(M_b)
+%       0.26   min over the admissible (M,K) wedge, attained on K = M
+%              (that one lives in make_figS5, not here)
+%   The gap DECREASES in M along the identification curve (0.417 at M = 8.8
+%   to 0.292 at M = 29.4), so the binding replicates are the large-M ones.
 %
-%  Consequence for panel D: at q_1 = 0.0282 the observed point is
-%  alpha_req(7) = 0.542 against L_inf(7) = 0.451 and K_max = 35.9. Under the
-%  old q_N anchor it read 1.572 and 3.56, i.e. inadmissible. The reversal is
-%  the point of the panel, so check it after any change here.
+%   ESTIMATOR is the dimensionless moment ratio lambda/Tbar via calib_pool.
+%   The model carries no timescale of its own, so only scale-free features
+%   of the latencies identify M; a likelihood on raw seconds is not
+%   scale-invariant and returns 4.3 here by absorbing the units mismatch.
+%   With a free scale profiled out the likelihood is scale-invariant but has
+%   no advantage over the ratio (recovery [10.1, 22.6] against [10.3, 22.5]
+%   at n = 125). fit_pool_mle.m runs that version as a cross-check.
 %
-%  NO FIGURE, BUT REPORTED: report_scaling prints the threshold-scaling
-%  worked example quoted in the main text (Sec. threshold_scaling), so that
-%  those numbers come off the same primitives as the panels rather than
-%  being recomputed by hand. Two of the three errors caught in this project
-%  came from separately recomputed quantities.
-%
-%  Usage:  bayes = solve_bayes([2 5 10 20 40 100], 3.5678);
-%          out   = make_fig4(bayes, 'output');
-%
-%  ZPK 2026
+%   The calibration lives in calib_pool.m and is run at theta_1(M) at each
+%   grid point rather than at a fixed threshold, because lambda/Tbar is NOT
+%   threshold-free at this M (11% spread over theta in [1,6] at M = 14).
 
-if nargin < 1, bayes = []; end
-if nargin < 2 || isempty(outdir), outdir = 'output'; end
+if nargin < 1 || isempty(csvfile), csvfile = find_datas1(); end
+if nargin < 2, opts = struct; end
+opts = defaults(opts);
 
-P = struct();
-P.qN_obs = 0.3210;                       % SHOAL-level rate, M-pooled
-P.Mhat   = 13.5241;                      % pooling count, from make_fig5
-P.q1_obs = 1 - (1-P.qN_obs)^(1/P.Mhat);  % 0.028220, PER-UNIT
-% Propagated from the Mhat bootstrap interval [8.8249, 29.4032] (corrected
-% file|bout cluster key, 4000 replicates). The earlier [9.9, 26.0] came from
-% the pre-fix key and is superseded; q_1 is DECREASING in M, so the upper M
-% gives the lower q_1 and the endpoints enter reversed.
-P.q1_CI  = [1-(1-P.qN_obs)^(1/29.4032), 1-(1-P.qN_obs)^(1/8.8249)];
-P.theta1 = -log(P.q1_obs);               % 3.5677, the K = 1 anchor
-P.K_obs  = 7;
-P.alpha_hat = 0.9489;                    % from make_fig5, for report_scaling
-P.outdir = outdir;
-P.LW     = 3.5;  P.FSZ = 26;  P.FIG = [22 19];
-P.greens = [0.75 0.90 0.78; 0.55 0.80 0.60; 0.36 0.68 0.44;
-            0.20 0.55 0.32; 0.10 0.42 0.24; 0.03 0.28 0.15];
-P.blues  = [0.72 0.86 0.94; 0.35 0.60 0.82; 0.08 0.24 0.48];
+D = load_pacher(csvfile);
+S = summarise(D);
+B = bootstrap_joint(D, opts);
 
-fprintf(['\n  q_N = %.4f (shoal) -> q_1 = %.4f (per unit) at Mhat = %.2f\n' ...
-         '  theta_1 = -log(q_1) = %.4f   (K = 1 anchor)\n'], ...
-        P.qN_obs, P.q1_obs, P.Mhat, P.theta1);
-out = struct('theta1', P.theta1);
-[out.N_A, out.tail_A]   = panelA(bayes, P);
-out.T1_B                = panelB(P);
-[out.frontier, out.N_C] = panelC(P);
-out.D                   = panelD(P);
-out.scaling             = report_scaling(P);
-fprintf('\n');
+out = struct('data',D,'stats',S,'boot',B);
+
+panelA(D, S, opts);
+panelB(D, S, opts);
+panelC(S, opts);
+panelD(S, B, opts);
+
 end
 
-%% ======================= A: total survival drift ========================
-function [Ns, tails] = panelA(bayes, P)
-Ns = []; tails = [];
-if isempty(bayes)
-    fprintf('  panel A skipped (no solver output passed)\n'); return
+% =========================================================================
+% data
+% =========================================================================
+function f = find_datas1()
+%FIND_DATAS1  Locate the Pacher Data S1 CSV when none is passed in.
+pat = {'DataS1.csv','Data_S1.csv','*data_s1*.csv','*Data*S1*.csv','*pacher*.csv','*adt8600*.csv'};
+for i = 1:numel(pat)
+    d = dir(pat{i});
+    d = d(~[d.isdir]);
+    if ~isempty(d), f = fullfile(d(1).folder, d(1).name); return; end
 end
-f  = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
+error('make_fig4:nofile', ...
+    ['No Data S1 CSV found in %s.\n' ...
+     'Call it with an explicit path, e.g.  make_fig4(''~/Dropbox/escape/data/DataS1.csv'')'], pwd);
+end
+
+function D = load_pacher(csvfile)
+%LOAD_PACHER  Parse Data S1. Semicolon-delimited, 19 lines of legend, header
+%   on line 20, 17 columns. Line 2 claims the sheet is attacks only -- it is
+%   not; the 81 flybys sit in the same block with risk = 'flyby'. Below the
+%   real data is a second stacked block (26 blanks, a repeated header, and 47
+%   rows shifted one column left) which must be dropped: filtering rows whose
+%   risk field is exactly 'predator_attack' or 'flyby' removes it.
+%
+%   Columns used: 1 file, 10 risk, 11 area (sqm), 12 true_positive,
+%                 13 t_first (FRAMES at 25 fps), 14 bout_id.
+%   Missing values are the literal string 'NA'.
+
+HDRLINE = 20; FPS = 25;
+fid = fopen(csvfile,'r');
+if fid < 0, error('make_fig4:csv','cannot open %s', csvfile); end
+raw = textscan(fid,'%s','Delimiter','\n','Whitespace','');
+fclose(fid);
+raw = raw{1};
+rows = raw(HDRLINE+1:end);
+
+nm = {}; risk = {}; area = []; tp = []; tf = []; bout = {};
+for i = 1:numel(rows)
+    f = strsplit(rows{i}, ';', 'CollapseDelimiters', false);
+    if numel(f) < 14, continue; end
+    r = strtrim(f{10});
+    if ~(strcmp(r,'predator_attack') || strcmp(r,'flyby')), continue; end
+    nm{end+1,1}   = strtrim(f{1});                              %#ok<AGROW>
+    risk{end+1,1} = r;                                          %#ok<AGROW>
+    area(end+1,1) = str2num_na(f{11});                          %#ok<AGROW>
+    tp(end+1,1)   = str2num_na(f{12});                          %#ok<AGROW>
+    tf(end+1,1)   = str2num_na(f{13}) / FPS;                    %#ok<AGROW>
+    bout{end+1,1} = strtrim(f{14});                             %#ok<AGROW>
+end
+
+D.file   = nm;
+D.attack = strcmp(risk,'predator_attack');
+D.area   = area;
+D.resp   = tp;                     % 1 responded, 0 not, NaN unscored
+D.tfirst = tf;                     % seconds, NaN where NA -- ALL events
+D.tdet   = tf(D.attack & ~isnan(tf));  % detection latencies, attacks only
+D.clust  = clusterkey(nm, bout);   % see below
+
+% D.tfirst carries timings for every scored event, including 23 flybys that
+% were answered. Those are false-alarm response latencies, not detections,
+% and must not enter the pooling-count fit -- including them gives 148
+% latencies rather than 125. Use D.tdet for anything modeling
+% E[T_(1) | H = 1].
+
+% bout_id restarts within each recording (only 10 distinct values across 18
+% recordings), so the key must be file|bout rather than bout alone. That
+% gives 73 clusters, 47 carrying attacks and 26 carrying flybys. The NA
+% branch in clusterkey never fires on this dataset -- flybys DO carry bout
+% labels ('kk' 49 times, 'other' 32, otherwise '1' to '9').
+end
+
+function key = clusterkey(file, bout)
+n = numel(file); key = cell(n,1); k = 0;
+for i = 1:n
+    if isempty(bout{i}) || strcmpi(bout{i},'NA')
+        k = k + 1; key{i} = sprintf('%s|solo%04d', file{i}, k);
+    else
+        key{i} = sprintf('%s|%s', file{i}, bout{i});
+    end
+end
+end
+
+function v = str2num_na(s)
+s = strtrim(s);
+if isempty(s) || strcmpi(s,'NA'), v = NaN; else, v = str2double(s); end
+end
+
+% =========================================================================
+% statistics
+% =========================================================================
+function S = summarise(D)
+isA = D.attack & ~isnan(D.resp);
+isF = ~D.attack & ~isnan(D.resp);
+
+S.nA = sum(isA);  S.kA = sum(D.resp(isA)==1);
+S.nF = sum(isF);  S.kF = sum(D.resp(isF)==1);
+S.TP = S.kA / S.nA;
+S.q  = S.kF / S.nF;
+
+t = D.tdet;      % attacks only
+S.t = t;  S.nT = numel(t);
+S.tmean = mean(t);
+S.lam   = ig_shape(t);            % inverse-Gaussian MLE shape
+S.stat  = S.lam / S.tmean;        % scale-free -- this is what identifies M
+
+S.M = invert_M(S.stat);
+S.alpha  = alphahat_from_rates(S.TP, S.q, S.M);
+S.q1     = 1 - (1 - S.q)^(1/S.M);
+S.theta1 = -log(S.q1);
+S.Kmax   = log(1 - S.q1) / log(1 - S.q1^2);
+end
+
+function lam = ig_shape(t)
+% MLE for the inverse-Gaussian shape at fixed mean: 1/lam = mean(1/t - 1/mu)
+mu  = mean(t);
+lam = 1 / mean(1./t - 1/mu);
+end
+
+function B = bootstrap_joint(D, opts)
+%BOOTSTRAP_JOINT  Cluster bootstrap, stratified by event type so the thin
+%   flyby stratum (26 clusters) cannot vanish. Propagates BOTH rate sampling
+%   error and timing/M uncertainty -- alpha depends on M, so resampling them
+%   independently would understate the interval.
+rng(opts.seed);
+[keys, ~, ci] = unique(D.clust);
+isA = D.attack;
+cA  = unique(ci(isA));  cF = unique(ci(~isA));
+nrep = opts.nboot;
+B.M = nan(nrep,1); B.alpha = nan(nrep,1); B.TP = nan(nrep,1); B.q = nan(nrep,1);
+
+for b = 1:nrep
+    pick = [cA(randi(numel(cA), numel(cA), 1)); ...
+            cF(randi(numel(cF), numel(cF), 1))];
+    idx = [];
+    for j = 1:numel(pick), idx = [idx; find(ci == pick(j))]; end %#ok<AGROW>
+
+    a  = D.attack(idx);  r = D.resp(idx);  t = D.tfirst(idx);
+    okA = a & ~isnan(r); okF = ~a & ~isnan(r);
+    if ~any(okA) || ~any(okF), continue; end
+    TP = mean(r(okA)==1);  q = mean(r(okF)==1);
+    tt = t(a & ~isnan(t));            % detection latencies only
+    if numel(tt) < 20 || TP <= q, continue; end
+
+    M = invert_M(ig_shape(tt)/mean(tt));
+    B.TP(b) = TP; B.q(b) = q; B.M(b) = M;
+    B.alpha(b) = alphahat_from_rates(TP, q, M);
+end
+
+ok = ~isnan(B.alpha);
+B.Mci     = prctile(B.M(ok),     [2.5 97.5]);
+B.alphaci = prctile(B.alpha(ok), [2.5 97.5]);
+B.pOver   = mean(B.alpha(ok) > linf_ceiling(B.M(ok)));
+B.nvalid  = sum(ok);
+% Minimum excess over replicates. This is the number the paper reports as
+% "a minimum excess of 0.20", NOT the point-estimate gap of 0.376, which is
+% what panel C shades at Mhat. The two differ because the gap decreases in M
+% and the bootstrap reaches well past Mhat.
+B.minexcess = min(B.alpha(ok) - linf_ceiling(B.M(ok)));
+fprintf(['  bootstrap: M in [%.2f, %.2f], alpha in [%.3f, %.3f]\n' ...
+         '             %d/%d valid, P(alpha > L_inf) = %.4f, min excess = %.4f\n'], ...
+        B.Mci(1), B.Mci(2), B.alphaci(1), B.alphaci(2), ...
+        B.nvalid, nrep, B.pOver, B.minexcess);
+end
+
+% =========================================================================
+% panels
+% =========================================================================
+function panelA(D, S, opts)
+%PANEL A  response rate vs shoal area. This is where TP and q come from, and
+%   it carries the point that the false-alarm rate is measured on flybys.
+[f, ax] = newfig(opts, 'A');
+plotbinned(ax, D, true,  opts.colAttack, 'o', opts);
+plotbinned(ax, D, false, opts.colFlyby,  's', opts);
+xg = linspace(min(D.area(~isnan(D.area))), max(D.area(~isnan(D.area))), 200)';
+plot(ax, xg, logistic_curve(D, true,  xg), '-', 'Color', opts.colAttack, 'LineWidth', opts.LW);
+plot(ax, xg, logistic_curve(D, false, xg), '-', 'Color', opts.colFlyby,  'LineWidth', opts.LW);
+xlim(ax, [min(xg) max(xg)]); ylim(ax, [0 1]);
+lab(ax, 'shoal area $A$ (m$^2$)', 'response probability', opts);
+txt(ax, 0.58, 0.90, 'true positives (attacks)', opts.colAttack, opts);
+txt(ax, 0.58, 0.18, 'false positives (flybys)', opts.colFlyby, opts);
+finish(f, opts, 'fig4A');
+end
+
+function panelB(D, S, opts) %#ok<INUSL>
+%PANEL B  first-response-time distribution with the maximum-likelihood inverse
+%   Gaussian. The calibration that turns this shape into M was an inset here
+%   and is now panel C.
+[f, ax] = newfig(opts, 'B');
+edges = 0:1:ceil(max(S.t));
+histogram(ax, S.t, edges, 'Normalization','pdf', ...
+    'FaceColor', opts.colHist, 'EdgeColor','w', 'FaceAlpha', 1);
+tt = linspace(0.2, max(S.t), 400);
+plot(ax, tt, igpdf(tt, S.tmean, S.lam), '-', 'Color', opts.colAttack, 'LineWidth', opts.LW);
+xlim(ax, [0 min(max(S.t), 20)]); ylim(ax, [0 1.15*max(igpdf(tt, S.tmean, S.lam))]);
+lab(ax, 'first response time $t_{(1)}$ (s)', 'probability density', opts);
+txt(ax, 0.62, 0.62, 'group minimum', opts.colAttack, opts, -2);
+finish(f, opts, 'fig4B');
+end
+
+
+function panelC(S, opts)
+%PANEL C  the calibration. lambda_IG/Tbar against the pooling count, run at the
+%   self-consistent threshold theta_1(M) at every grid point so nothing is
+%   tuned, with the inversion of the observed value marked. Promoted from an
+%   inset inside panel B, so it now carries full-size type.
+[f, ax] = newfig(opts, 'C');
+[Mg, sg] = calibration_grid();
+plot(ax, Mg, sg, '-o', 'Color', [0.2 0.2 0.2], 'MarkerFaceColor','w', ...
+     'LineWidth', opts.LW-1.0, 'MarkerSize', 8);
+plot(ax, [Mg(1) S.M S.M], [S.stat S.stat 0], ':', 'Color', opts.colAttack, ...
+     'LineWidth', opts.LW-0.5);
+set(ax, 'XScale','log', 'XLim',[2 90], 'YLim',[0 1.15*max(sg)], ...
+        'XTick',[2 5 10 20 50 90]);
+lab(ax, 'pooling count $M$', 'shape $\lambda_{\rm IG}/\bar T_{(1)}$', opts);
+txt(ax, 0.52, 0.20, sprintf('$\\hat M = %.1f$', S.M), opts.colAttack, opts, -2);
+finish(f, opts, 'fig4C');
+end
+
+
+function panelD(S, B, opts)
+%PANEL D  the verdict. x is the pooling count M throughout -- alpha-hat is a
+%   function of M alone, K enters only the benchmark. Since K <= M and L_inf
+%   is increasing, the optimum at abscissa M lies anywhere in [0, L_inf(M)];
+%   shading that region and putting alpha-hat above it says what the (M,K)
+%   heatmap said, without a second axis and without the K/M conflation.
+[f, ax] = newfig(opts, 'D');
+Mg = linspace(2, opts.Mmax, 400)';
+Lg = linf_ceiling(Mg);
+Ag = alphahat_from_rates(S.TP, S.q, Mg);
+
+% 95% interval on Mhat, drawn as a capped bar near the top rather than as a
+% full-height shaded band. The band read as an unexplained region and had to
+% be described in the caption; a bar with caps is self-evidently an interval.
+yb = 1.035;  cap = 0.022;
+plot(ax, B.Mci, [yb yb], '-', 'Color', opts.colEst, 'LineWidth', 3);
+plot(ax, [B.Mci(1) B.Mci(1)], yb+[-cap cap], '-', 'Color', opts.colEst, 'LineWidth', 3);
+plot(ax, [B.Mci(2) B.Mci(2)], yb+[-cap cap], '-', 'Color', opts.colEst, 'LineWidth', 3);
+plot(ax, S.M, yb, 'o', 'MarkerFaceColor', opts.colEst, 'MarkerEdgeColor','w', ...
+     'MarkerSize', 9, 'LineWidth', 1.5);
+fillbetween(ax, Mg, Lg, Ag, opts.colGap, 0.22);
+fillbetween(ax, Mg, zeros(size(Mg)), Lg, opts.colOpt, 0.16);
+plot(ax, [2 opts.Mmax], [1 1], '--', 'Color', [0.65 0.65 0.65], 'LineWidth', 2);
+plot(ax, [2 opts.Mmax], [0 0], ':', 'Color', [0.65 0.65 0.65], 'LineWidth', 2);
+plot(ax, Mg, Lg, '-',  'Color', opts.colOpt, 'LineWidth', opts.LW);
+plot(ax, Mg, Ag, '-',  'Color', opts.colEst, 'LineWidth', opts.LW);
+errorbar(ax, S.M, S.alpha, S.alpha - B.alphaci(1), B.alphaci(2) - S.alpha, ...
+    'o', 'Color', opts.colEst, 'MarkerFaceColor', opts.colEst, ...
+    'MarkerSize', 11, 'LineWidth', 2.5, 'CapSize', 10);
+xlim(ax, [2 opts.Mmax]); ylim(ax, [-0.03 1.10]);
+lab(ax, 'pooling count $M$', 'social discounting rate $\alpha$', opts);
+
+txt(ax, 0.80, 0.955, '$\alpha = 1$',        [0.55 0.55 0.55], opts, -6);
+txt(ax, 0.24, 0.045, 'naive $\alpha = 0$',  [0.55 0.55 0.55], opts, -6);
+txt(ax, 0.79, 0.855, '$\hat\alpha(M)$',     opts.colEst,      opts);
+txt(ax, 0.58, 0.66,  'excess discounting',  [0.35 0.35 0.35], opts, -2);
+txt(ax, 0.63, 0.32,  'individually Bayesian', opts.colOpt,    opts, -2);
+txt(ax, 0.63, 0.24,  '$L_\infty(K),\ K \le M$', opts.colOpt,  opts, -4);
+fM = (B.Mci(2) + 1.5 - 2)/(opts.Mmax - 2);
+txt(ax, fM, (1.035 + 0.03)/1.13, '$\hat M$, 95\%', opts.colEst, opts, -6);
+fa = (S.M + 2.2 - 2)/(opts.Mmax - 2);
+txt(ax, fa, (S.alpha - 0.09 + 0.03)/1.13, sprintf('$\\hat\\alpha = %.2f$', S.alpha), ...
+    opts.colEst, opts, -2);
+finish(f, opts, 'fig4D');
+end
+
+% =========================================================================
+% model
+% =========================================================================
+
+function a = alphahat_from_rates(TP, q, M)
+%ALPHAHAT_FROM_RATES  Eq. (13) inversion at pooling count M.
+%   Per-unit rates from the shoal-level ones, then the Mobius form.
+%   Reproduces 0.8836 at M = 7 and 0.9511 at M = 14. Kept explicit here
+%   because the bootstrap calls it with RESAMPLED rates, which calib_pool's
+%   cached rates would not reflect.
+q1 = 1 - (1 - q).^(1./M);
+m1 = (1 - TP).^(1./M);
+r  = log(q1) ./ log(m1);
+a  = (r - 1) ./ (r + 1);
+end
+
+function M = invert_M(stat)
+%INVERT_M  map lam/mean onto the pooling count. Delegates to calib_pool so
+%   every figure inverts against ONE curve, calibrated self-consistently at
+%   theta_1(M) rather than at an arbitrary threshold. See calib_pool.m for
+%   why the threshold is not free.
+M = calib_pool('invert', stat);
+end
+
+function [Mg, sg] = calibration_grid()
+[Mg, sg] = calib_pool('grid');
+end
+
+
+% =========================================================================
+% helpers
+% =========================================================================
+function y = igpdf(t, mu, lam)
+y = sqrt(lam./(2*pi*t.^3)) .* exp(-lam*(t-mu).^2 ./ (2*mu^2*t));
+end
+
+
+function plotbinned(ax, D, wantAttack, col, mk, opts)
+sel = (D.attack == wantAttack) & ~isnan(D.resp) & ~isnan(D.area);
+a = D.area(sel); r = D.resp(sel);
+q = quantile_local(a, [0 .2 .4 .6 .8 1]);
+for j = 1:5
+    in = a >= q(j) & a <= q(j+1);
+    if sum(in) < 3, continue; end
+    k = sum(r(in)==1); n = sum(in);
+    [lo, hi] = wilson(k, n);
+    x = median(a(in));
+    plot(ax, [x x], [lo hi], '-', 'Color', col, 'LineWidth', 2.0);
+    plot(ax, x, k/n, mk, 'MarkerFaceColor', col, 'MarkerEdgeColor', col, ...
+         'MarkerSize', 4 + 10*n/numel(a)*5, 'LineWidth', 2.0);
+end
+end
+
+function y = logistic_curve(D, wantAttack, xg)
+sel = (D.attack == wantAttack) & ~isnan(D.resp) & ~isnan(D.area);
+X = [ones(sum(sel),1) D.area(sel)]; yv = double(D.resp(sel)==1);
+b = irls_logit(X, yv);
+y = 1 ./ (1 + exp(-[ones(numel(xg),1) xg] * b));
+end
+
+function b = irls_logit(X, y)
+% plain Newton-Raphson logistic fit -- no Statistics Toolbox
+b = zeros(size(X,2),1);
+for it = 1:60
+    p = 1./(1+exp(-X*b));
+    W = p.*(1-p) + 1e-9;
+    z = X*b + (y - p)./W;
+    bn = (X' * (W .* X)) \ (X' * (W .* z));
+    if norm(bn - b) < 1e-10, b = bn; break; end
+    b = bn;
+end
+end
+
+function q = quantile_local(x, p)
+x = sort(x(:)); n = numel(x);
+h = (n-1)*p(:) + 1; lo = floor(h); hi = ceil(h);
+q = x(lo) + (h - lo).*(x(hi) - x(lo));
+end
+
+function fillbetween(ax, x, ylo, yhi, col, alpha)
+patch(ax, [x; flipud(x)], [ylo; flipud(yhi)], col, 'EdgeColor','none', 'FaceAlpha', alpha);
+end
+
+function [f, ax] = newfig(opts, letter)
+%NEWFIG  house style, as make_fig4: 22 x 19 cm, LaTeX throughout, ticks out,
+%   no box, LW 3.5 on data, 2 on axes. Panel letters are added in assembly,
+%   so opts.letters is false by default.
+f  = figure('Units','centimeters','Position',[1 1 opts.FIG],'Color','w');
 ax = axes(f); hold(ax,'on'); box(ax,'off')
-nb = numel(bayes); Ns = nan(1,nb); tails = nan(1,nb);
-for i = 1:nb
-    N = bayes(i).N; t = bayes(i).t(:); lam = bayes(i).lam(:); thN = bayes(i).thetaN;
-    L = (N-1)*lam;  x = t/thN;
-    plot(ax, x, L, '-', 'Color', P.greens(min(i,size(P.greens,1)),:), 'LineWidth', P.LW);
-    % Tail by EXTRAPOLATION on a window common in rescaled time, not a
-    % window mean: fit L ~ A + B*(t/theta)^(-2/3), take the intercept.
-    w  = x >= 3 & x <= 6.8 & isfinite(L);
-    cf = [ones(nnz(w),1), x(w).^(-2/3)] \ L(w);
-    Ns(i) = N; tails(i) = cf(1);
+set(ax,'TickDir','out','TickLabelInterpreter','latex', ...
+       'FontSize',opts.fs,'LineWidth',opts.axLW,'Layer','top');
+if ~isempty(letter) && opts.letters
+    annotation(f,'textbox',[0.005 0.90 0.10 0.09],'String',letter, ...
+        'FontWeight','bold','FontSize',opts.fs+12,'EdgeColor','none', ...
+        'HorizontalAlignment','left','VerticalAlignment','middle');
 end
-plot(ax, xlim(ax), [1 1], ':', 'Color',[0.4 0.4 0.4], 'LineWidth', 2);
-xlabel(ax,'rescaled time $t/\theta_N$','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'survival correction $\lambda^{(N)}_{\rm tot}(t)$', ...
-       'Interpreter','latex','FontSize',P.FSZ+8);
-set(ax,'TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
-pos = get(ax,'Position');
-axI = axes(f,'Position',[pos(1)+0.50*pos(3), pos(2)+0.52*pos(4), 0.40*pos(3), 0.36*pos(4)]);
-hold(axI,'on'); box(axI,'off')
-Ng = logspace(log10(2), log10(200), 300);
-plot(axI, Ng, linf(Ng), '--', 'Color',[0.2 0.2 0.2], 'LineWidth', 2.5);
-plot(axI, Ns, tails, 'o', 'MarkerSize', 10, 'LineWidth', 2.5, ...
-     'MarkerEdgeColor',[0.03 0.28 0.15], 'MarkerFaceColor','w');
-set(axI,'XScale','log','TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ-10);
-xlabel(axI,'$N$','Interpreter','latex','FontSize',P.FSZ-4);
-ylabel(axI,'tail $L_\infty$','Interpreter','latex','FontSize',P.FSZ-4);
-ylim(axI,[0 1.05]);
-fprintf('  panel A: tails / L_inf ='); fprintf(' %.3f', tails./linf(Ns)); fprintf('\n');
-%  POST: tails approach L_inf FROM BELOW, tightening with N. The draft's
-%        "from above, exceeding by ~20%%" was a window-mean artifact.
-export(f, 'fig4A', P);
 end
 
-%% ==================== B: first-departure density ========================
-function T1 = panelB(P)
-% One figure, two stacked axes sharing an x-axis: top naive, bottom Bayesian
-% at the self-consistent alpha = L_inf(N). Independent y-limits (the naive
-% densities are taller); a single y-label spans both tiles.
-f  = figure('Units','centimeters','Position',[1 1 P.FIG(1) P.FIG(2)*1.10],'Color','w');
-tl = tiledlayout(f, 2, 1, 'TileSpacing','tight','Padding','compact');
-
-t  = linspace(1e-3, 1.3*P.theta1, 6000)';   % plotting grid
-% The mean is a separate, LONGER integral. At theta_1 = 3.57 the N = 1
-% survival still carries ~5% of its mass past t = 8, so computing T1 by
-% trapz on the plotting grid truncates it (3.376 against the exact 3.5677 =
-% theta by Wald). N > 1 is unaffected, since the minimum concentrates at
-% small t -- which is why this stayed hidden at the old theta_1 = 1.136.
-tI = linspace(1e-4, 60*P.theta1, 200000)';  % integration grid
-NB = [1 10 100];  T1 = nan(2,numel(NB));
-axB = gobjects(1,2);
-for j = 1:2
-    axB(j) = nexttile(tl); hold(axB(j),'on'); box(axB(j),'off')
-    for i = 1:numel(NB)
-        N = NB(i);
-        % Lower tile uses the model's own self-consistent rate at each N,
-        % alpha = L_inf(N), not a single fitted value: panel A establishes
-        % that the Bayesian rate varies with N, and alpha_hat is empirical,
-        % belonging to Fig. 5. L_inf(1) = 0, so N = 1 coincides in both tiles.
-        if j == 1, a = 0; else, a = linf(N); end
-        Sv = surv(t, 1-a, P.theta1);  fv = igd(t, 1-a, P.theta1);
-        plot(axB(j), t, N*fv.*Sv.^(N-1), '-', 'Color', P.blues(i,:), 'LineWidth', P.LW);
-        T1(j,i) = trapz(tI, surv(tI, 1-a, P.theta1).^N);
-    end
-    set(axB(j),'TickDir','out','TickLabelInterpreter','latex', ...
-               'FontSize',P.FSZ-2,'LineWidth',2);
-    % x-limit scales with the threshold: at theta_1 = 3.57 the N = 1 mean is
-    % 3.57, so the old [0 1] window cut off the naive tile entirely.
-    axis(axB(j),[0 1.2*P.theta1 0 2.2]);
-end
-set(axB(1),'XTickLabel',[]);                       % shared x-axis
-% MODEL UNITS, not seconds. The model carries no timescale of its own: the
-% only place seconds appear is Fig. 5, where the Pacher latencies set one.
-% The caption states the axis is truncated at 1.2*theta_1, so the label must
-% not promise a physical unit the abscissa does not carry.
-xlabel(tl,'time $t$','Interpreter','latex','FontSize',P.FSZ+6);
-ylabel(tl,'first-departure density, $H=1$','Interpreter','latex','FontSize',P.FSZ+6);
-
-%  POST: top tile is alpha = 0 (naive), bottom is alpha = L_inf(N)
-%        (Bayesian); line darkness is N = 1, 10, 100. No legend by design --
-%        annotate in assembly.
-fprintf('  panel B: mean T_(1) naive    ='); fprintf(' %7.3f', T1(1,:)); fprintf('\n');
-fprintf('           mean T_(1) Bayesian ='); fprintf(' %7.3f', T1(2,:)); fprintf('\n');
-export(f, 'fig4B', P);
+function lab(ax, xs, ys, opts)
+xlabel(ax, xs, 'Interpreter','latex', 'FontSize', opts.fs+8);
+ylabel(ax, ys, 'Interpreter','latex', 'FontSize', opts.fs+8);
 end
 
-%% ======================= C: Pareto frontier =============================
-function [front, NC] = panelC(P)
-f  = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
-ax = axes(f); hold(ax,'on'); box(ax,'off')
-th_g = linspace(0.2, 3.5*P.theta1, 200);  a_g = linspace(0, 0.95, 35);  NC = [1 5 20];
-tC = linspace(1e-4, 400, 150000)';  front = cell(1,numel(NC));
-for i = 1:numel(NC)
-    N = NC(i); Pts = zeros(0,2);
-    for a = a_g
-        if N == 1 && a > 0, continue, end     % alpha is inert for a lone agent
-        for th = th_g
-            Pts(end+1,:) = [trapz(tC, surv(tC,1-a,th).^N), ...
-                            1-(1-exp(-(1+a)*th))^N]; %#ok<AGROW>
-        end
-    end
-    Pts = sortrows(Pts,1); keep = false(size(Pts,1),1); best = inf;
-    for r = 1:size(Pts,1)
-        if Pts(r,2) < best, keep(r) = true; best = Pts(r,2); end
-    end
-    front{i} = Pts(keep,:);
-    plot(ax, front{i}(:,1), front{i}(:,2), '-', 'Color', P.blues(i,:), 'LineWidth', P.LW);
+function txt(ax, fx, fy, str, col, opts, dfs)
+%TXT  place a label at fractional position (fx,fy) of the CURRENT axis
+%   limits, converted to data units. Setting 'Units','normalized' in the
+%   text() call itself is unreliable: Position is applied in data units
+%   first and only reinterpreted afterwards. Requires xlim/ylim to be set
+%   before the call.
+if nargin < 7, dfs = 0; end
+xl = get(ax,'XLim'); yl = get(ax,'YLim');
+if strcmp(get(ax,'XScale'),'log')
+    x = 10^(log10(xl(1)) + fx*(log10(xl(2))-log10(xl(1))));
+else
+    x = xl(1) + fx*diff(xl);
 end
-set(ax,'YScale','log','TickDir','out','TickLabelInterpreter','latex', ...
-       'FontSize',P.FSZ,'LineWidth',2);
-xlabel(ax,'detection time $\bar T_{(1)}$','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'group false alarm rate $q_N$','Interpreter','latex','FontSize',P.FSZ+8);
-xlim(ax,[0 2.5*P.theta1]); ylim(ax,[1e-4 1]);
-legend(ax, arrayfun(@(n) sprintf('$N=%d$',n), NC, 'uni',0), ...
-       'Interpreter','latex','Box','off','Location','northeast','FontSize',P.FSZ-6);
-fprintf('  panel C: frontier points ='); fprintf(' %d', cellfun(@(c) size(c,1), front)); fprintf('\n');
-export(f, 'fig4C', P);
+y = yl(1) + fy*diff(yl);
+text(ax, x, y, str, 'Color', col, 'FontSize', opts.fs + dfs, ...
+     'Interpreter','latex', 'HorizontalAlignment','center', ...
+     'VerticalAlignment','middle', 'Clipping','off');
 end
 
-%% =================== D: required discounting rate =======================
-function D = panelD(P)
-f  = figure('Units','centimeters','Position',[1 1 P.FIG(1)+2 P.FIG(2)],'Color','w');
-ax = axes(f); hold(ax,'on'); box(ax,'off')
-q_g = logspace(log10(1e-3), log10(0.5), 420);
-K_g = logspace(log10(1),    log10(100), 380);
-[Q,K] = meshgrid(q_g, K_g);
-A = areq(K,Q); Aplot = A; Aplot(A > 1 | A < 0) = NaN;
-pc = pcolor(ax, q_g, K_g, Aplot);
-set(pc,'EdgeColor','none','FaceColor','texturemap')
-colormap(ax, plasma()); caxis(ax,[0 1])
-Kmax = log(1-q_g)./log(1-q_g.^2);                    % exact alpha = 1 boundary
-patch(ax, [q_g fliplr(q_g)], [Kmax 1e4*ones(size(q_g))], ...
-      [0.88 0.88 0.88], 'EdgeColor','none','FaceAlpha',0.92)
-plot(ax, q_g, Kmax, '-', 'Color',[0.15 0.15 0.15], 'LineWidth', P.LW);
-[c1,h1] = contour(ax, q_g, K_g, A, 0.1:0.1:0.9, 'LineColor',[1 1 1], 'LineWidth', 1.6);
-clabel(c1, h1, 'Color',[1 1 1], 'FontSize', 18, 'LabelSpacing', 600)
-q_linf = arrayfun(@(k) q_at_alpha(k, linf(k)), K_g);
-plot(ax, q_linf, K_g, '-', 'Color',[0.10 0.45 0.85], 'LineWidth', P.LW);
-% observed operating point, with the Mhat-propagated interval on q_1
-plot(ax, P.q1_CI, [P.K_obs P.K_obs], '-', 'Color',[0.35 0.10 0.55], 'LineWidth', P.LW);
-plot(ax, P.q1_obs, P.K_obs, 'o', 'MarkerFaceColor',[0.35 0.10 0.55], ...
-     'MarkerEdgeColor','w', 'MarkerSize', 16, 'LineWidth', 2.5);
-set(ax,'XScale','log','YScale','log','TickDir','out', ...
-       'TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
-xlim(ax,[q_g(1) q_g(end)]); ylim(ax,[1 100]);
-set(ax,'XTick',[1e-3 1e-2 1e-1 0.5],'XTickLabel',{'0.001','0.01','0.1','0.5'});
-set(ax,'YTick',[1 2 5 10 20 50 100],'YTickLabel',{'1','2','5','10','20','50','100'});
-xlabel(ax,'false alarm rate held constant, $q_1$','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'attended neighbors $K$','Interpreter','latex','FontSize',P.FSZ+8);
-cb = colorbar(ax); cb.Label.String = 'required $\alpha$';
-cb.Label.Interpreter = 'latex'; cb.Label.FontSize = P.FSZ; cb.TickLabelInterpreter = 'latex';
-%  POST labels:
-%    grey wedge  "discounting alone insufficient: threshold must rise"
-%                (NOT "inadmissible" -- the rate is attainable, just not at
-%                fixed theta)
-%    black curve "$K_{\max}\simeq 1/q_1$"
-%    blue curve  "$\alpha_{\rm req} = L_\infty(K)$", with the reading
-%                glossed either side: left, individually Bayesian discounting
-%                already suffices; right, it does not.
-%    purple dot  the sulphur molly operating point, $(q_1, K) = (0.028, 7)$,
-%                bar the interval propagated from Mhat. It sits to the RIGHT
-%                of the blue curve, so the required rate exceeds what
-%                individually Bayesian updating supplies -- the same
-%                conclusion the empirical fit reaches, from the false alarm
-%                rate alone.
-fprintf(['  panel D: alpha_req(K=%d, q_1=%.4f) = %.3f  vs  L_inf(%d) = %.3f\n' ...
-         '           K_max(obs) = %.2f\n'], ...
-        P.K_obs, P.q1_obs, areq(P.K_obs,P.q1_obs), P.K_obs, linf(P.K_obs), ...
-        log(1-P.q1_obs)/log(1-P.q1_obs^2));
-% the two endpoints of the drawn interval bar, for the caption
-fprintf('           q_1 interval from Mhat = [%.4f, %.4f]\n', P.q1_CI(1), P.q1_CI(2));
-export(f, 'fig4D', P);
-D = struct('q',q_g,'K',K_g,'alpha_req',A,'Kmax_of_q',Kmax,'q_at_Linf',q_linf);
-end
-
-%% ============ threshold scaling worked example (no figure) ==============
-function S = report_scaling(P)
-% Sec. threshold_scaling quotes: at K = 7 the naive rule needs theta_K =
-% 5.51 where a discounter at alpha_hat needs 2.83, and the group detection
-% time at MATCHED false alarm rate falls from 1.79 to 0.96 at N = 20. The
-% thresholds were already right; the two times had no console line behind
-% them, which is what this block supplies. Same primitives as panel B, same
-% long integration grid, so no separate recomputation.
-K = P.K_obs; a = P.alpha_hat; Nrep = [7 20];
-thK = [(P.theta1 + log(K))/1, (P.theta1 + log(K))/(1 + a)];   % naive, discounted
-tI  = linspace(1e-4, 4000, 400000)';
-S = struct('K',K,'alpha',a,'theta_K',thK,'N',Nrep,'T1',nan(2,numel(Nrep)));
-for j = 1:2
-    for i = 1:numel(Nrep)
-        S.T1(j,i) = trapz(tI, surv(tI, 1-(j-1)*a, thK(j)).^Nrep(i));
-    end
-end
-fprintf('  scaling: K = %d, alpha_hat = %.4f\n', K, a);
-fprintf('           theta_K naive = %.4f   discounted = %.4f\n', thK(1), thK(2));
-for i = 1:numel(Nrep)
-    fprintf('           N = %3d:  T_(1) naive = %.4f   discounted = %.4f   (%.2fx faster)\n', ...
-            Nrep(i), S.T1(1,i), S.T1(2,i), S.T1(1,i)/S.T1(2,i));
-end
-%  POST: these are at MATCHED group false alarm rate, since theta_K is set by
-%        the pinning relation in each case. Contrast with panel B, which
-%        holds theta fixed instead and therefore shows discounting COSTING
-%        speed. Both statements are in the text and they are not in conflict.
-end
-
-%% ============================ helpers ===================================
-function export(f, name, P)
-if exist(P.outdir,'dir')
-    exportgraphics(f, fullfile(P.outdir,[name '.pdf']), 'ContentType','vector');
-    exportgraphics(f, fullfile(P.outdir,[name '.png']), 'Resolution',400);
+function finish(f, opts, name)
+%FINISH  export both formats into opts.outdir, as make_fig4's export().
+if exist(opts.outdir,'dir')
+    exportgraphics(f, fullfile(opts.outdir,[name '.pdf']), 'ContentType','vector');
+    exportgraphics(f, fullfile(opts.outdir,[name '.png']), 'Resolution',400);
     fprintf('           wrote %s.pdf / .png\n', name);
 else
-    fprintf('           outdir "%s" not found -- %s not exported\n', P.outdir, name);
+    fprintf('           outdir "%s" not found -- %s not exported\n', opts.outdir, name);
 end
 end
 
-function f = igd(t, mu, th)
-t = t(:); f = zeros(size(t)); ok = t > 0; tt = t(ok);
-f(ok) = th ./ sqrt(4*pi*tt.^3) .* exp(-(th - mu*tt).^2 ./ (4*tt));
+function opts = defaults(opts)
+% Second argument is an options STRUCT here but an output DIRECTORY string in
+% make_figS3--S7. Accept either, so make_fig4(csv,'output') does the obvious
+% thing rather than erroring in fieldnames().
+if ischar(opts) || isstring(opts), opts = struct('outdir', char(opts)); end
+d = struct( ...
+    'FIG', [22 19], ...                         % centimetres, as make_fig4
+    'fs', 26, 'LW', 3.5, 'axLW', 2.0, ...       % P.FSZ, P.LW
+    'letters', false, ...                       % panel letters added in assembly
+    'nboot', 4000, 'seed', 20260811, ...
+    'Mmax', 40, ...
+    'colAttack', [0.20 0.55 0.32], ...          % P.greens(4,:)
+    'colFlyby',  [0.08 0.24 0.48], ...          % P.blues(3,:)
+    'colHist',   [0.75 0.90 0.78], ...          % P.greens(1,:)
+    'colOpt',    [0.30 0.30 0.30], ...   % theory: achromatic
+    'colEst',    [0.35 0.10 0.55], ...
+    'colGap',    [0.35 0.10 0.55], ...   % excess, tinted to match colEst
+    'outdir', 'output');
+fn = fieldnames(d);
+for i = 1:numel(fn)
+    if ~isfield(opts, fn{i}), opts.(fn{i}) = d.(fn{i}); end
+end
 end
 
-function S = surv(t, mu, th)
-t = t(:); S = ones(size(t)); ok = t > 0; tt = t(ok);
-S(ok) = ncdf((th - mu*tt)./sqrt(2*tt)) - exp(mu*th).*ncdf((-th - mu*tt)./sqrt(2*tt));
-S = min(max(S,0),1);
-end
-
-function p = ncdf(x)
-% Local standard normal CDF. Every other script in the repo carries one of
-% these; this file was the last caller of the Statistics Toolbox normcdf,
-% which meant the figure pipeline was not toolbox-free as the README claims.
-p = 0.5*erfc(-x./sqrt(2));
-end
-
-function L = linf(N)
-k = N - 1;
-L = ((k + 2) - 2*sqrt(k + 1)) ./ max(k, eps);
-L(N <= 1) = 0;
-end
-
-function a = areq(K, q)
-a = log(1 ./ (1 - (1-q).^(1./K))) ./ log(1./q) - 1;
-a(K == 1) = 0;
-end
-
-function q = q_at_alpha(K, a)
-if K <= 1 || a <= 0, q = NaN; return, end
-g = @(lq) areq(K, exp(lq)) - a;
-lo = log(1e-14); hi = log(0.5 - 1e-9);
-if g(lo)*g(hi) > 0, q = NaN; return, end
-q = exp(fzero(g, [lo hi]));
-end
-
-function m = plasma()
-m = [0.050 0.030 0.528; 0.179 0.016 0.592; 0.281 0.012 0.632;
-     0.367 0.012 0.659; 0.445 0.026 0.672; 0.519 0.052 0.674;
-     0.586 0.089 0.661; 0.647 0.130 0.638; 0.700 0.171 0.609;
-     0.749 0.215 0.576; 0.792 0.260 0.540; 0.832 0.308 0.502;
-     0.866 0.358 0.462; 0.897 0.411 0.422; 0.922 0.467 0.381;
-     0.943 0.526 0.341; 0.958 0.589 0.302; 0.968 0.654 0.266;
-     0.973 0.722 0.234; 0.975 0.793 0.210; 0.973 0.864 0.199;
-     0.970 0.936 0.212];
-end

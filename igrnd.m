@@ -11,3 +11,4 @@ u = rand(n,1);
 sw = u > mu./(mu + x);
 x(sw) = mu^2 ./ x(sw);
 end
+

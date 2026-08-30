@@ -1,182 +1,252 @@
-function out = make_figS6(csvfile, xlsfile, outdir)
-%MAKE_FIGS6  Area scaling and shoal density: what Data S2 does and does not
-%            license.
+function out = make_figS6(outdir)
+%MAKE_FIGS6  Robustness of the pooling count $\hat M$.
 %
-%  A  first response time against shoal area, log-log, with the file|bout
-%     clustered interval on the slope. The point estimate is negative, as a
-%     first-passage minimum requires, but the clustered interval crosses
-%     zero, so this is a SIGN CHECK and not a bound on M.
-%  B  Data S2, headcount against area, pooled and within site. Pooled the
-%     slope looks like constant density, but that is entirely between-site;
-%     within a site area does not track headcount at all. Shoal area
-%     measures spread, not pool size.
-%  C  density from the nearest-neighbor distance rather than from the
-%     tracked count, and the resulting physical headcount against Mhat.
-%     Ntags_total/area is NOT a density: it contradicts the NND in the same
-%     file by two orders of magnitude, so Ntags is a tracked subset.
+%  Three standalone panels, fully self-contained (no data file needed).
 %
-%  Usage:  out = make_figS6('sciadv_adt8600_data_s1.csv', ...
-%                           'sciadv_adt8600_data_s2.xlsx', 'output');
+%  A  the scale-free statistic lambda/Tbar against theta, at several M, with
+%     the self-consistent locus theta_1(M) marked. The statistic is NOT
+%     threshold-free at the M of interest: measured spread across theta in
+%     [1,6] is 54% at M=5, 18% at M=10, 12% at M=14, 8% at M=20, 5% at
+%     M=40. This panel motivates the self-consistent calibration rather than
+%     asserting independence: the threshold is fixed by the false alarm rate
+%     through theta_1(M) = -log(1-(1-q)^(1/M)), so the loop closes and
+%     nothing is tuned. The markers show where each M is actually read.
+%  B  right-censoring sensitivity. Simulate at a known M, censor the top x%
+%     of latencies, and read the implied Mhat back off the calibration. The
+%     observed tail quantiles are marked; the data show no censoring
+%     signature, so this bounds how much a censoring reading could move M.
+%  C  correlated accumulators. Repeat the calibration with equicorrelated
+%     streams and plot Mhat against the correlation. This turns the
+%     independence caveat into a number.
+%
+%  NEITHER B NOR C IS DRAWN OUTSIDE ITS VALID RANGE. The moment ratio
+%  inverts against calib_pool's grid (M up to 90) with interp1 'extrap', so
+%  anything past the top of that grid is extrapolation; the likelihood
+%  searches a bounded grid, so a value sitting at the ceiling is the ceiling
+%  rather than an estimate. Panel B now blanks both cases, and panel C's
+%  correlation sweep stops at c = 0.45, the last point where Mhat stays
+%  inside the calibrated range.
+%
+%  Usage:  out = make_figS6('output');
 %
 %  ZPK 2026
 
-if nargin < 1 || isempty(csvfile), csvfile = 'sciadv_adt8600_data_s1.csv';  end
-if nargin < 2 || isempty(xlsfile), xlsfile = 'sciadv_adt8600_data_s2.xlsx'; end
-if nargin < 3 || isempty(outdir),  outdir  = 'output'; end
+if nargin < 1 || isempty(outdir), outdir = 'output'; end
 P.outdir = outdir;
 P.LW = 3.5;  P.FSZ = 26;  P.FIG = [22 19];
-P.green = [0.20 0.55 0.32];  P.blue = [0.08 0.24 0.48];
-P.grey  = [0.45 0.45 0.45];  P.est  = [0.35 0.10 0.55];
-P.B = 4000;
-% Mhat is derived from the loaded latencies rather than from a hardcoded 3.93,
-% so this panel cannot drift from the data the rest of the paper fits.
-P.Mhat = [];   % filled after the load, below
+P.greens = [0.75 0.90 0.78; 0.55 0.80 0.60; 0.36 0.68 0.44;
+            0.20 0.55 0.32; 0.10 0.42 0.24; 0.03 0.28 0.15];
+P.blue   = [0.08 0.24 0.48];
+P.nsamp    = 2e5;
+P.Mmle_max = 300;                               % likelihood search ceiling
+P.stat_obs = 3.93;                              % lambda/Tbar in the molly data
+P.Mhat     = calib_pool('invert', P.stat_obs);  % 13.53; rates live in calib_pool
 
-rng(31);
-D = read_pacher(csvfile, xlsfile);
-assert_key(D);
-td = D.tdet;                                    % attacks only, 125 latencies
-P.stat  = (1/(mean(1./td) - 1/mean(td)))/mean(td);
-P.Mhat  = calib_pool('invert', P.stat);
-fprintf('  shape %.4f -> Mhat %.2f (expect 3.928 -> 13.52)\n', P.stat, P.Mhat);
-out.A = panelA(D, P);
-out.B = panelB(D, P);
-out.C = panelC(D, P);
+rng(4);
+out.A = panelA(P);
+out.B = panelB(P);
+out.C = panelC(P);
 fprintf('\n');
 end
 
-%% ============== A: latency against area, clustered ======================
-function A = panelA(D, P)
+%% ============== A: the statistic is near theta-free ====================
+function A = panelA(P)
 f = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
 ax = axes(f); hold(ax,'on'); box(ax,'off')
-sel = D.attack & ~isnan(D.tfirst) & ~isnan(D.area);   % detections only
-a = D.area(sel); t = D.tfirst(sel);
-plot(ax, a, t, 'o', 'MarkerEdgeColor', P.grey, 'MarkerSize', 7, 'LineWidth', 1.5);
-b = [ones(numel(a),1) log(a)] \ log(t);
-xg = linspace(min(a), max(a), 200)';
-plot(ax, xg, exp(b(1))*xg.^b(2), '-', 'Color', P.green, 'LineWidth', P.LW);
-
-% clustered bootstrap on the log-log slope
-[~, ~, ci] = unique(D.clust(sel));
-cu = unique(ci); sl = nan(P.B,1);
-for k = 1:P.B
-    pick = cu(randi(numel(cu), numel(cu), 1));
-    idx = [];
-    for j = 1:numel(pick), idx = [idx; find(ci == pick(j))]; end %#ok<AGROW>
-    if numel(unique(a(idx))) < 5, continue; end
-    bb = [ones(numel(idx),1) log(a(idx))] \ log(t(idx));
-    sl(k) = bb(2);
+th_g = linspace(1, 6, 11);  Mg = [5 10 14 20 40];
+S = nan(numel(Mg), numel(th_g));  Ssc = nan(size(Mg));
+for i = 1:numel(Mg)
+    a = calib_pool('alpha', Mg(i));
+    for j = 1:numel(th_g)
+        S(i,j) = poolstat(Mg(i), th_g(j), a, P.nsamp);
+    end
+    plot(ax, th_g, S(i,:), '-', 'Color', P.greens(min(i+1,6),:), 'LineWidth', P.LW);
+    % where this M is actually read: the self-consistent threshold
+    thsc = calib_pool('theta1', Mg(i));
+    Ssc(i) = poolstat(Mg(i), thsc, a, P.nsamp);
+    plot(ax, thsc, Ssc(i), 'o', 'MarkerFaceColor', P.greens(min(i+1,6),:), ...
+         'MarkerEdgeColor','w', 'MarkerSize', 14, 'LineWidth', 2);
 end
-sl = sl(~isnan(sl)); ciS = prctile(sl, [2.5 97.5]);
-set(ax,'XScale','log','YScale','log','TickDir','out', ...
-       'TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
-xlabel(ax,'shoal area $A$ (m$^2$)','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'first response time $t_{(1)}$ (s)','Interpreter','latex','FontSize',P.FSZ+8);
-fprintf(['  panel A: n = %d timed attacks over %d clusters\n' ...
-         '           log-log slope %.3f, clustered 95%% CI [%.3f, %.3f]\n'], ...
-        numel(a), numel(cu), b(2), ciS(1), ciS(2));
-fprintf('           interval crosses zero: %d\n', ciS(1) < 0 && ciS(2) > 0);
-% Expect n = 125 over 42 clusters, slope -0.429, CI [-0.841, 0.071]. If n
-% comes back 148, the selection has picked up the 23 answered flybys, which
-% are false-alarm latencies rather than detections, and the slope drifts to
-% -0.382. Shoal area is near-constant within a recording-bout (within-cluster
-% SD of log A is 0.018 against 0.234 overall, under 1% of the variance), so
-% this slope is identified across recordings, not across events, and the
-% width of the interval reflects that rather than thin timing data.
-%  POST: state the slope and the CLUSTERED interval, and say in the caption
-%        that the interval crosses zero, so the panel checks the sign of the
-%        area dependence and does not bound M.
-export(f,'figs6A',P);
-A = struct('slope',b(2),'ci',ciS,'boot',sl);
+plot(ax, arrayfun(@(m) calib_pool('theta1',m), Mg), Ssc, '-', ...
+     'Color', [0.35 0.10 0.55], 'LineWidth', P.LW-1);
+set(ax,'TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
+xlabel(ax,'threshold $\theta$','Interpreter','latex','FontSize',P.FSZ+8);
+ylabel(ax,'shape $\lambda/\bar T_{(1)}$','Interpreter','latex','FontSize',P.FSZ+8);
+xlim(ax,[1 6]);
+rel = (max(S,[],2)-min(S,[],2))./mean(S,2);
+fprintf('  panel A: relative spread over theta ='); fprintf(' %.3f', rel); fprintf('\n');
+fprintf('           self-consistent theta_1(M) =');
+fprintf(' %.2f', arrayfun(@(m) calib_pool('theta1',m), Mg)); fprintf('\n');
+%  POST: label curves M = 5, 10, 14, 20, 40 (light to dark), placing the
+%        M = 5 label clear of the purple locus, which it currently collides
+%        with. Markers are the self-consistent points theta = theta_1(M),
+%        joined by that locus. State the spreads and say plainly that the
+%        statistic is threshold-dependent at small M, which is WHY the
+%        calibration is run along the locus rather than at a fixed theta.
+export(f,'figS6A',P);
+A = struct('theta',th_g,'M',Mg,'stat',S,'relspread',rel,'selfcon',Ssc);
 end
 
-%% ============== B: area does not track headcount within site ===========
-function B = panelB(D, P)
-if isempty(D.s2)
-    fprintf('  panel B skipped (Data S2 not supplied)\n'); B = []; return
-end
+%% ============== B: right-censoring sensitivity =========================
+function B = panelB(P)
 f = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
 ax = axes(f); hold(ax,'on'); box(ax,'off')
-s2 = D.s2; sites = unique(s2.site);
-cols = [P.green; P.blue; P.grey];
-if numel(sites) > size(cols,1)       % three sites expected; do not index past it
-    cols = repmat(cols, ceil(numel(sites)/size(cols,1)), 1);
-    warning('collesc:sites','%d sites found, expected 3', numel(sites));
+[Mgrid, scurve] = calib(P);
+% Range stops at 30%. Beyond that the moment ratio leaves calib_pool's grid
+% and the panel would be plotting extrapolation, the same thing panel C's
+% sweep was truncated to avoid. Both numbers the caption quotes, 22 at 5%
+% and 42 at 20%, sit inside this range, and the argument is about the LEFT
+% edge in any case, since the molly latencies show no censoring signature.
+frac = 0:0.05:0.30;  Mtrue = [10 round(P.Mhat) 20];
+Mimp = nan(numel(Mtrue), numel(frac));  Mmle = nan(numel(Mtrue), numel(frac));
+for i = 1:numel(Mtrue)
+    a = calib_pool('alpha', Mtrue(i));
+    % Threshold at the SELF-CONSISTENT locus theta_1(M), not a fixed value.
+    % Panel A exists to show lambda/Tbar is threshold-dependent at these M
+    % (12% spread over theta in [1,6] at M = 14), so simulating panel B at a
+    % hardcoded theta = 2.0 read the shape off a different point of the very
+    % curve panel A plots. Panel C already used theta_1(M); this matches it.
+    x = poolsample(Mtrue(i), calib_pool('theta1', Mtrue(i)), a, P.nsamp);
+    for j = 1:numel(frac)
+        keep = x <= quantile_local(x, 1-frac(j));
+        Mimp(i,j)  = interp1(scurve, Mgrid, shapeover(x(keep)), 'linear', 'extrap');
+        Mmle(i,j)  = fit_pool_mle(x(keep), struct('ngrid',120,'Mmax',P.Mmle_max));
+        % Neither estimator is drawn outside the range it is valid on. Past
+        % the top of the calibration grid the moment ratio is extrapolating;
+        % at the likelihood's search ceiling the value IS the ceiling, not an
+        % estimate.
+        if Mimp(i,j) > max(Mgrid),           Mimp(i,j) = NaN; end
+        if Mmle(i,j) > 0.98*P.Mmle_max,      Mmle(i,j) = NaN; end
+    end
+    plot(ax, 100*frac, Mimp(i,:), '--', 'Color', P.greens(2*i,:), 'LineWidth', P.LW-1);
+    plot(ax, 100*frac, Mmle(i,:), '-',  'Color', P.greens(2*i,:), 'LineWidth', P.LW);
+    plot(ax, 0, Mtrue(i), 'o', 'MarkerFaceColor', P.greens(2*i,:), ...
+         'MarkerEdgeColor', P.greens(2*i,:), 'MarkerSize', 10);
 end
-sl = nan(numel(sites),1);
-for i = 1:numel(sites)
-    m = s2.site == sites(i);
-    plot(ax, s2.area(m), s2.N(m), 'o', 'MarkerFaceColor', cols(i,:), ...
-         'MarkerEdgeColor', cols(i,:), 'MarkerSize', 8);
-    bb = [ones(sum(m),1) log(s2.area(m))] \ log(s2.N(m));
-    sl(i) = bb(2);
-    xg = linspace(min(s2.area(m)), max(s2.area(m)), 50)';
-    plot(ax, xg, exp(bb(1))*xg.^bb(2), '-', 'Color', cols(i,:), 'LineWidth', P.LW);
-end
-bp = [ones(numel(s2.area),1) log(s2.area)] \ log(s2.N);
-xg = linspace(min(s2.area), max(s2.area), 100)';
-plot(ax, xg, exp(bp(1))*xg.^bp(2), '--', 'Color',[0.1 0.1 0.1], 'LineWidth', P.LW);
-set(ax,'XScale','log','YScale','log','TickDir','out', ...
-       'TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
-xlabel(ax,'shoal area $A$ (m$^2$)','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'tracked count','Interpreter','latex','FontSize',P.FSZ+8);
-fprintf('  panel B: pooled slope %.3f; within-site slopes', bp(2));
-fprintf(' %+.2f', sl); fprintf('\n');
-%  POST: dashed black is the pooled fit, which looks like constant density.
-%        The solid within-site fits are what matters, and they are flat or
-%        negative, so the pooled slope is a between-site artifact and shoal
-%        area is not a proxy for pool size.
-export(f,'figs6B',P);
-B = struct('pooled_slope',bp(2),'site_slopes',sl);
-end
-
-%% ============== C: density from spacing, not from tracking =============
-function C = panelC(D, P)
-if isempty(D.s2)
-    fprintf('  panel C skipped (Data S2 not supplied)\n'); C = []; return
-end
-f = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
-ax = axes(f); hold(ax,'on'); box(ax,'off')
-s2 = D.s2; nnd = s2.nnd_mm/1000;                    % m
-rho_pois = 1./(4*nnd.^2);                           % mean NND = 1/(2 sqrt(rho))
-rho_hex  = 2./(sqrt(3)*nnd.^2);                     % close packing
-rho_trk  = s2.N ./ s2.area;                         % NOT a density
-
-Ag = linspace(30, 80, 100)';
-patch(ax, [Ag; flipud(Ag)], [median(rho_pois)*Ag; flipud(median(rho_hex)*Ag)], ...
-      P.green, 'FaceAlpha', 0.22, 'EdgeColor','none');
-plot(ax, Ag, median(rho_pois)*Ag, '-', 'Color', P.green, 'LineWidth', P.LW);
-plot(ax, Ag, median(rho_hex)*Ag,  '-', 'Color', P.green, 'LineWidth', P.LW);
-plot(ax, Ag, median(rho_trk)*Ag,  '--', 'Color', P.grey, 'LineWidth', P.LW);
-plot(ax, Ag, P.Mhat*ones(size(Ag)), '-', 'Color', P.est, 'LineWidth', P.LW);
+plot(ax, xlim(ax), P.Mhat*[1 1], ':', 'Color',[0.4 0.4 0.4], 'LineWidth', 2);
 set(ax,'YScale','log','TickDir','out','TickLabelInterpreter','latex', ...
        'FontSize',P.FSZ,'LineWidth',2);
-xlabel(ax,'shoal area $A$ (m$^2$)','Interpreter','latex','FontSize',P.FSZ+8);
-ylabel(ax,'number of fish','Interpreter','latex','FontSize',P.FSZ+8);
-xlim(ax,[30 80]); ylim(ax,[5 1e6]);
-fprintf('  panel C: NND %.1f mm -> rho = %.0f/m2 (Poisson) to %.0f/m2 (hex)\n', ...
-        1000*median(nnd), median(rho_pois), median(rho_hex));
-fprintf('           at A = 56.2 m2: %.2e to %.2e fish, against Mhat = %.2f\n', ...
-        56.2*median(rho_pois), 56.2*median(rho_hex), P.Mhat);
-fprintf('           pooling count is %.1e of the spacing-implied headcount\n', ...
-        P.Mhat/(56.2*median(rho_pois)));
-fprintf('           tracked-count ratio understates density by %.0fx\n', ...
-        median(rho_pois)/median(rho_trk));
-fprintf('           median BL %.1f mm -> spacing %.2f body lengths\n', ...
-        median(s2.bl_mm), median(nnd)*1000/median(s2.bl_mm));
-%  POST: green band is the headcount implied by the measured nearest-neighbor
-%        distance, between the Poisson and close-packed readings. Purple is
-%        the fitted pooling count. Grey dashed is Ntags_total/area, which is
-%        two orders of magnitude below the spacing-implied density and is
-%        therefore a tracked subset rather than a census. The pooling count
-%        is about 1e-4 of the fish present, which is the quantitative form of
-%        the correlated-and-occluded-visual-fields argument.
-export(f,'figs6C',P);
-C = struct('rho_poisson',median(rho_pois),'rho_hex',median(rho_hex), ...
-           'rho_tracked',median(rho_trk));
+xlabel(ax,'latencies censored (\%)','Interpreter','latex','FontSize',P.FSZ+8);
+ylabel(ax,'implied $\hat M$','Interpreter','latex','FontSize',P.FSZ+8);
+fprintf('  panel B: at  5%% censoring, true M=%d reads as %.1f (moment ratio) / %.1f (MLE)\n', ...
+        Mtrue(2), interp1(frac, Mimp(2,:), 0.05), interp1(frac, Mmle(2,:), 0.05));
+fprintf('           at 20%% censoring, true M=%d reads as %.1f (moment ratio) / %.1f (MLE)\n', ...
+        Mtrue(2), interp1(frac, Mimp(2,:), 0.20), interp1(frac, Mmle(2,:), 0.20));
+nb = sum(isnan(Mimp(:))) + sum(isnan(Mmle(:)));
+fprintf('           %d point(s) blanked as out of range (grid top %.0f, MLE ceiling %d)\n', ...
+        nb, max(Mgrid), P.Mmle_max);
+%  POST: DASHED is the moment ratio (the headline estimator), SOLID the
+%        scale-free likelihood cross-check; dotted line is the OBSERVED
+%        Mhat = 13.5, which is a different object from panel C's dotted
+%        line (the simulation's true M = 14) and should be labelled so.
+%        Both estimators are sensitive to censoring, since both must read
+%        the shape of a distribution whose scale is not identified. Label
+%        the three curves inline in their own colours, as panels A and C do,
+%        leaving the legend to carry only the solid/dashed key. Say in the
+%        caption that the molly latencies show NO censoring signature (95th
+%        pct 9.1 s, max 27.8 s, one event within 2 s of the max), so the
+%        relevant point is the left edge; the curves bound how far a
+%        censoring reading could move the estimate, not how far it does.
+export(f,'figS6B',P);
+B = struct('frac',frac,'Mtrue',Mtrue,'Mimplied',Mimp,'Mmle',Mmle);
+end
+
+%% ============== C: correlated accumulators =============================
+function C = panelC(P)
+f = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
+ax = axes(f); hold(ax,'on'); box(ax,'off')
+[Mgrid, scurve] = calib(P);
+% Sweep stops at 0.45, the last point at which the recovered Mhat is still
+% inside the calibration grid. Past it Mhat falls below M = 2 by
+% extrapolation, and a pooling count under two is meaningless.
+c_g = 0:0.05:0.45;  Mtrue = round(P.Mhat);  a = calib_pool('alpha', Mtrue);
+Mc = nan(size(c_g));
+for j = 1:numel(c_g)
+    x = poolsample_corr(Mtrue, calib_pool('theta1',Mtrue), a, P.nsamp, c_g(j));
+    Mc(j) = interp1(scurve, Mgrid, shapeover(x), 'linear', 'extrap');
+end
+plot(ax, c_g, Mc, '-', 'Color', P.greens(4,:), 'LineWidth', P.LW);
+plot(ax, c_g, Mtrue*ones(size(c_g)), ':', 'Color',[0.4 0.4 0.4], 'LineWidth', 2);
+yyaxis(ax,'right');
+plot(ax, c_g, arrayfun(@(m) calib_pool('alpha',m), Mc), '-', ...
+     'Color', P.blue, 'LineWidth', P.LW);
+plot(ax, c_g, arrayfun(@(m) linf_ceiling(m), Mc), '--', 'Color', P.blue, 'LineWidth', 2.5);
+ylabel(ax,'$\hat\alpha$ and $L_\infty(\hat M)$','Interpreter','latex','FontSize',P.FSZ+8);
+set(ax,'YColor',P.blue); ylim(ax,[0 1]);
+yyaxis(ax,'left'); ylabel(ax,'recovered $\hat M$','Interpreter','latex','FontSize',P.FSZ+8);
+set(ax,'YColor',P.greens(4,:));
+set(ax,'TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
+xlabel(ax,'accumulator correlation $c$','Interpreter','latex','FontSize',P.FSZ+8);
+ga = arrayfun(@(m) calib_pool('alpha',m) - linf_ceiling(m), Mc);
+fprintf('  panel C: c = 0 -> Mhat %.1f;  c = %.2f -> Mhat %.1f\n', Mc(1), c_g(end), Mc(end));
+fprintf('           gap at c = 0: %+.3f;  at c = %.2f: %+.3f\n', ga(1), c_g(end), ga(end));
+fprintf('           gap over the sweep: min %+.3f at c = %.2f, max %+.3f at c = %.2f\n', ...
+        min(ga), c_g(find(ga == min(ga),1)), max(ga), c_g(find(ga == max(ga),1)));
+fprintf('           gap stays positive: %d\n', all(ga > 0));
+%  POST: correlation moves Mhat DOWN sharply -- at c = 0.2 the estimate is
+%        already halved -- and alpha-hat with it. The gap against
+%        L_inf(Mhat) is NOT monotone: it widens as Mhat falls through about
+%        seven, peaking at 0.44 near c = 0.25, then turns over, and over the
+%        whole calibrated range it varies only between 0.33 and 0.44. That
+%        is the honest statement, not "narrows without closing". The dotted
+%        line here is the SIMULATION's true M = 14, not panel B's observed
+%        Mhat = 13.5; label the green curve Mhat, since it is recovered.
+%        Report the point estimate as conditional on independence and the
+%        SIGN as robust over the range tested.
+export(f,'figS6C',P);
+C = struct('c',c_g,'Mhat',Mc,'gap',ga);
 end
 
 %% ============================ helpers ==================================
+function [Mg, sg] = calib(~)
+[Mg, sg] = calib_pool('grid');
+end
+
+function s = poolstat(M, th, a, n)
+s = shapeover(poolsample(M, th, a, n));
+end
+
+function x = poolsample(M, th, a, n)
+M = round(M);
+y = igrnd(th/(1-a), th^2/2, n);
+k = floor(n/M);
+x = min(reshape(y(1:k*M), k, M), [], 2);
+end
+
+function x = poolsample_corr(M, th, a, n, c, dt, Tmax)
+%POOLSAMPLE_CORR  Minimum of M EQUICORRELATED first passages.
+%   Each unit accumulates sqrt(c)*(shared Brownian) + sqrt(1-c)*(own
+%   Brownian) at drift 1-a against threshold th, so c is the correlation
+%   between accumulators WITHIN a trial. Simulated directly, since there is
+%   no closed form for the minimum of correlated first passages.
+if nargin < 6 || isempty(dt),   dt   = 0.01; end
+if nargin < 7 || isempty(Tmax), Tmax = 80;   end
+M   = round(M);  ntr = max(round(n/M), 2000);
+mu  = 1 - a;  sig = sqrt(2);  sc = sig*sqrt(dt);
+X   = zeros(ntr, M);  out = nan(ntr,1);  t = 0;
+for k = 1:round(Tmax/dt)
+    t = t + dt;
+    zc = randn(ntr,1);  zi = randn(ntr,M);
+    X  = X + mu*dt + sc*(sqrt(c)*zc + sqrt(1-c)*zi);
+    hit = any(X >= th, 2) & isnan(out);
+    if any(hit), out(hit) = t; X(hit,:) = -Inf; end
+    if ~any(isnan(out)), break; end
+end
+x = out(~isnan(out));
+end
+
+function s = shapeover(t)
+m = mean(t);  s = (1/(mean(1./t) - 1/m)) / m;
+end
+
+
+
+function q = quantile_local(x, p)
+x = sort(x(:)); n = numel(x);
+h = (n-1)*p(:) + 1; lo = floor(h); hi = ceil(h);
+q = x(lo) + (h - lo).*(x(hi) - x(lo));
+end
+
 function export(f, name, P)
 if exist(P.outdir,'dir')
     exportgraphics(f, fullfile(P.outdir,[name '.pdf']), 'ContentType','vector');
@@ -187,20 +257,3 @@ else
 end
 end
 
-function assert_key(D)
-%ASSERT_KEY  Guard against the column-index error that keyed clusters on
-%   location|bout instead of file|bout. That gave 83/47/17 and silently
-%   narrowed the flyby stratum, which every q-derived interval below rests
-%   on. Correct is 73 clusters, 47 carrying attacks, 26 carrying flybys.
-[~, ~, ci] = unique(D.clust);
-n  = numel(unique(ci));
-nA = numel(unique(ci(D.attack)));
-nF = numel(unique(ci(~D.attack)));
-fprintf('  cluster key: %d clusters, %d attack, %d flyby\n', n, nA, nF);
-if ~isequal([n nA nF], [73 47 26])
-    warning('collesc:clusterkey', ...
-        ['cluster key gives %d/%d/%d, expected 73/47/26 -- read_pacher is ' ...
-         'keying on the wrong column. Every clustered interval below is ' ...
-         'suspect; fix the loader before using this output.'], n, nA, nF);
-end
-end

@@ -98,7 +98,7 @@ end
 %  POST: label the curves by N (light to dark). H = 0 is omitted, flat at
 %        ~1.5e-3 for every N; state that in the caption rather than plotting
 %        a null result. The y-axis is left on auto so no curve is clipped.
-export(f,'figs2A',P);
+export(f,'figS2A',P);
 A = struct('N',Ns,'diff',{D},'peak',pk,'t_peak',tpk,'peak_in_window',inwin);
 end
 
@@ -145,7 +145,7 @@ end
 %        heuristic is used for. DASHED grey squares are the max pointwise
 %        survival gap under H=1, shown for contrast; its growth with N is
 %        expected, since the constant is applied through the transient.
-export(f,'figs2B',P);
+export(f,'figS2B',P);
 B = struct('N',Ns,'err_T1',eT,'err_H1',e1,'err_H0',e0, ...
            'min_S1',Smin,'frac_unresolved',frac);
 end

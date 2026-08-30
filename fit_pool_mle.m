@@ -122,3 +122,4 @@ S = min(max(S, 0), 1);
 end
 
 function p = ncdf(z), p = 0.5*(1 + erf(z/sqrt(2))); end
+

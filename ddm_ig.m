@@ -31,3 +31,4 @@ out.S = S;
 out.h = f ./ max(S, 1e-300);
 out.q = exp(-theta);          % false-alarm probability at mu = -1
 end
+

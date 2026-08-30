@@ -68,3 +68,4 @@ function v = pkern(y, t, yp, s)
 d = t - s;
 v = exp(-(y - yp).^2 ./ (4*d)) ./ sqrt(4*pi*d);
 end
+

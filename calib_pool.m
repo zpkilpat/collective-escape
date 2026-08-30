@@ -82,3 +82,4 @@ end
 function s = shape_over_mean(t)
 m = mean(t);  s = (1/(mean(1./t) - 1/m)) / m;
 end
+

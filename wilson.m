@@ -6,3 +6,4 @@ p = k/n;  d = 1 + z^2/n;  c = p + z^2/(2*n);
 h = z*sqrt(p*(1-p)/n + z^2/(4*n^2));
 lo = (c - h)/d;  hi = (c + h)/d;
 end
+

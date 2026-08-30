@@ -1,544 +1,353 @@
-%% MAKE_FIG3  The cost of ignoring a neighbour's hesitation (dyad).
+function out = make_fig3(bayes, outdir)
+%MAKE_FIG3  Fig. 3 as FOUR STANDALONE FIGURES, one per panel.
 %
-%  A  a false-alarm cascade under H=0, naive vs discounting on shared noise.
-%     Uses an ILLUSTRATIVE alphaA and thA, not the fitted values -- see below.
-%     NOTE: the heuristic kick theta + alpha*t exactly cancels the accumulated
-%     discount alpha*t, so both rules land the survivor in the SAME post-kick
-%     position. What differs is the TRIGGER: under H=0 the discounting agent
-%     drifts at -(1+alpha) and false-alarms later. That delay, not a weaker
-%     kick, is where the accuracy gain comes from.
-%  B  cascade probability ratio q_dyad/q^2 vs kick size, theta = 1,2,3.
-%  C  cascade delay vs kick size.
-%  D  Bayesian survival correction lambda(t) against the uncoupled single-agent
-%     hazard gap, with the closed-form ceiling L_inf(2) the heuristic adopts.
-%  E  survival functions, naive / heuristic / Bayesian.
-%  F  speed-accuracy frontier: naive, the lower envelope of the heuristic
-%     family swept over alpha, and the exact Bayesian dyad by Monte Carlo.
+%  Writes fig4A, fig4B, fig4C, fig4D as .pdf and .png,
+%  each sized and typeset for standalone
+%  use, to be assembled externally.  Nothing is tiled.
 %
-%  PANEL SELECTION. Set PANELS below to any subset of 'ABCDEF'. The fixed
-%  point is solved only when D or E is requested; F is independent of it and
-%  runs its own per-theta solves. Rerunning 'DEF' leaves fig3A/B/C untouched
-%  on disk.
+%  A  total survival drift (N-1)lambda^(N)(t) vs rescaled time, inset of the
+%     extrapolated tails against the closed form L_inf(N)
+%     -- REQUIRES the solver output from solve_bayes
+%  B  group first-departure density, two stacked tiles in one figure:
+%     naive over Bayesian at the self-consistent alpha = L_inf(N)
+%  C  group speed-accuracy Pareto frontier
+%  D  discounting rate REQUIRED to hold the false alarm rate, over (q_1, K)
 %
-%  WHICH PANELS USE theta1. Only D and E. Panel A runs at an illustrative
-%  thA = 1.8 chosen for legibility, B and C at theta = 1, 2, 3, and F sweeps
-%  theta as its abscissa. So a change of anchor requires rerunning 'DE' only.
-%  The caption must not declare theta_1 globally: it applies to D and E, and
-%  A's illustrative threshold has to be stated separately.
+%  Panels B, C, D are analytic and self-contained.  Panel A takes
+%      bayes(i).N  .t  .lam  .thetaN       (lam is PER-NEIGHBOUR lambda^(N))
+%  and is skipped if bayes = [].
 %
-%  PANEL D HORIZON. The axis
-%  now runs to TSHOW = 7*theta1, the top of that window, inside the solve
-%  horizon 8*theta1. The excess lambda - L_inf falls only as roughly 1/t, so
-%  a visually converged panel would need t ~ 30-50 theta and would be mostly
-%  flat line; the approach is reported as "from above" and left unquantified.
-%  The tail exponent is printed as a console diagnostic only: over the 0.36
-%  decades available it is not resolved well enough to publish.
+%  THRESHOLD (K = 1 anchor).  theta_1 = -log(q_1) is the SOLITARY threshold,
+%  so the solitary false alarm rate is exp(-theta_1) with no alpha in it.
+%  Holding the group rate there gives
+%      theta_N = (theta_1 + log N)/(1 + alpha),
+%  not theta_1 + log(N)/(1+alpha), which pinned to exp(-(1+alpha)*theta_1),
+%  the rate of an agent discounting neighbours it does not have.
 %
-%  PANEL E HORIZON. E keeps the original TSHOW_E = 8. It is a match-quality
-%  panel and its content lives where survival runs from 1 to about 0.1;
-%  stretching it to 7*theta1 crushes all the structure into the left third
-%  and leaves half the axis at zero. D and E deliberately differ.
+%  q_1 IS PER-UNIT, NOT THE GROUP RATE.  The observed q_N = 0.321 is the
+%  SHOAL-level false alarm rate, pooled over the M responders whose earliest
+%  crossing registers as a group response. The solitary rate is
+%      q_1 = 1 - (1-q_N)^(1/M) = 0.0282   at Mhat = 13.52,
+%  giving theta_1 = 3.5677. Earlier versions of this file used q_N directly,
+%  which set theta_1 = 1.1363 and made panels B, C, D the rate of a lone fish
+%  false-alarming a third of the time. Panel A was unaffected, since it reads
+%  the threshold from the solver struct rather than rebuilding it.
 %
-%  PANEL F ENVELOPE. The old version flattened the (alpha,theta) family into
-%  one vector, binned along T_(2), and plotted each bin minimum at its own
-%  jittered T. With about four points per bin the vertices were unevenly
-%  spaced, so the polyline zigzagged, and bins where a single branch still had
-%  support produced the drop near T_(2)=3.9. The family is now kept as a
-%  (theta,alpha) matrix, each branch is interpolated in log10(q) onto a common
-%  T grid over its own support only, the envelope is the pointwise minimum
-%  where at least MINBRANCH branches are defined, and a cumulative minimum
-%  enforces the Pareto property.
+%  Consequence for panel D: at q_1 = 0.0282 the observed point is
+%  alpha_req(7) = 0.542 against L_inf(7) = 0.451 and K_max = 35.9. Under the
+%  old q_N anchor it read 1.572 and 3.56, i.e. inadmissible. The reversal is
+%  the point of the panel, so check it after any change here.
 %
-%  PANEL F RESULT. The tuned envelope improves on naive by at most 0.57% across
-%  the whole range, and over about a quarter of it the minimising member of the
-%  family is alpha = 0 itself. The three rules are therefore on essentially the
-%  same frontier at N = 2, but say NEGLIGIBLE rather than UNRESOLVED: the exact
-%  Bayesian circles sit several MC standard errors off the naive curve, so the
-%  separation is statistically resolved and merely small. The draw order puts
-%  naive ON TOP as a thick dashed underlay with the envelope beneath it, so the
-%  panel reads as agreement rather than as one curve hiding two others.
+%  NO FIGURE, BUT REPORTED: report_scaling prints the threshold-scaling
+%  worked example quoted in the main text (Sec. threshold_scaling), so that
+%  those numbers come off the same primitives as the panels rather than
+%  being recomputed by hand. Two of the three errors caught in this project
+%  came from separately recomputed quantities.
 %
-%  Self-contained. ZPK 2026
+%  Usage:  bayes = solve_bayes([2 5 10 20 40 100], 3.5678);
+%          out   = make_fig3(bayes, 'output');
+%
+%  ZPK 2026
 
-clear; close all;
+if nargin < 1, bayes = []; end
+if nargin < 2 || isempty(outdir), outdir = 'output'; end
 
-PANELS      = 'F';     % any subset of 'ABCDEF'
-USE_CACHE_F = true;      % reuse output/fig3F_mc.mat for the Bayesian MC
+P = struct();
+P.qN_obs = 0.3210;                       % SHOAL-level rate, M-pooled
+P.Mhat   = 13.5241;                      % pooling count, from make_fig4
+P.q1_obs = 1 - (1-P.qN_obs)^(1/P.Mhat);  % 0.028220, PER-UNIT
+% Propagated from the Mhat bootstrap interval [8.8249, 29.4032] (corrected
+% file|bout cluster key, 4000 replicates). The earlier [9.9, 26.0] came from
+% the pre-fix key and is superseded; q_1 is DECREASING in M, so the upper M
+% gives the lower q_1 and the endpoints enter reversed.
+P.q1_CI  = [1-(1-P.qN_obs)^(1/29.4032), 1-(1-P.qN_obs)^(1/8.8249)];
+P.theta1 = -log(P.q1_obs);               % 3.5677, the K = 1 anchor
+P.K_obs  = 7;
+P.alpha_hat = 0.9489;                    % from make_fig4, for report_scaling
+P.outdir = outdir;
+P.LW     = 3.5;  P.FSZ = 26;  P.FIG = [22 19];
+P.greens = [0.75 0.90 0.78; 0.55 0.80 0.60; 0.36 0.68 0.44;
+            0.20 0.55 0.32; 0.10 0.42 0.24; 0.03 0.28 0.15];
+P.blues  = [0.72 0.86 0.94; 0.35 0.60 0.82; 0.08 0.24 0.48];
 
-want = @(c) any(PANELS == c);
-
-st = paper_style();  outdir = 'output';
-if ~exist(outdir,'dir'), mkdir(outdir); end
-
-theta1 = 3.5678;
-dt = 0.005;  Tmax = 8*theta1;
-t  = (0:dt:Tmax)';  nt = numel(t);
-
-TSHOW   = 7*theta1;      % D: top of the plateau window
-TSHOW_E = 8;             % E: decision-relevant window, NOT tied to TSHOW
-
-% The heuristic constant is the closed-form ceiling, not a window mean of
-% lambda(t). validate_alpha_choice scores L_inf at 2.7% on the dyad
-% first-departure time; a decision-window mean is 8.4% and worst on survival
-% error. L_inf is also theta-independent, which Panel F exploits. The window
-% mean is horizon-dependent besides: at theta1 = 3.5678 it reads 0.2153 over
-% [3,6.8]*theta while lambda is still falling at 7*theta. That window mean sits
-% 25% ABOVE L_inf. The extrapolated tail (solve_bayes) is 0.1636, 4.7% BELOW.
-% The 2.7% / 8.4% pair is produced by validate_alpha_choice.m, NOT here; it
-% must be rerun at this anchor before those numbers are quoted.
-alpha_dyad = linf_ceiling(2);
-
-if want('D') || want('E')
-    fprintf('Fig 3: solving Bayesian dyad fixed point...\n');
-    [~, lambda, info] = solve_lambda_fixedpoint(2, theta1, dt, Tmax);
-    fprintf('  alpha_dyad = L_inf(2) = %.4f  (numerical tail %.4f)\n', ...
-            alpha_dyad, info.tail);
-    fprintf('  solve horizon %.2f (= %.2f theta); D to %.2f, E to %.2f\n', ...
-            Tmax, Tmax/theta1, TSHOW, TSHOW_E);
+fprintf(['\n  q_N = %.4f (shoal) -> q_1 = %.4f (per unit) at Mhat = %.2f\n' ...
+         '  theta_1 = -log(q_1) = %.4f   (K = 1 anchor)\n'], ...
+        P.qN_obs, P.q1_obs, P.Mhat, P.theta1);
+out = struct('theta1', P.theta1);
+[out.N_A, out.tail_A]   = panelA(bayes, P);
+out.T1_B                = panelB(P);
+[out.frontier, out.N_C] = panelC(P);
+out.D                   = panelD(P);
+out.scaling             = report_scaling(P);
+fprintf('\n');
 end
 
-%% ---- A: a false-alarm cascade, naive vs discounting --------------------
-if want('A')
-thA = 1.8;  dtA = 0.004;  TA = 12;  tA = (0:dtA:TA)';  nA = numel(tA);
-% ILLUSTRATIVE alpha, not alpha_dyad. The whole visual content of this panel is
-% the within-pair gap alpha*t between a rule and its discounted counterpart. At
-% alpha_dyad = 0.17 and a crossing near t = 2.8 that gap is 0.48, against a
-% y-range set by the H=0 excursion, so it renders as two lines on top of each
-% other. Raising alpha widens the gap but also makes a crossing rarer, since
-% the naive path must now reach thA + alphaA*t under a drift of -1; alphaA much
-% above 0.4 empties the search. Fig. 1C already declares an illustrative
-% alpha = 0.8, so the caption convention exists. State alphaA there.
-alphaA = 0.4;
-best = [];  bestscore = -inf;
-for seed = 1:200000
-    rng(seed);
-    e1 = sqrt(2*dtA)*randn(nA,1);  e2 = sqrt(2*dtA)*randn(nA,1);
-    x1n = cumsum(-dtA + e1);  x2n = cumsum(-dtA + e2);
-    x1b = x1n - alphaA*tA;  x2b = x2n - alphaA*tA;      % same noise, discounted
+%% ======================= A: total survival drift ========================
+function [Ns, tails] = panelA(bayes, P)
+Ns = []; tails = [];
+if isempty(bayes)
+    fprintf('  panel A skipped (no solver output passed)\n'); return
+end
+f  = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
+ax = axes(f); hold(ax,'on'); box(ax,'off')
+nb = numel(bayes); Ns = nan(1,nb); tails = nan(1,nb);
+for i = 1:nb
+    N = bayes(i).N; t = bayes(i).t(:); lam = bayes(i).lam(:); thN = bayes(i).thetaN;
+    L = (N-1)*lam;  x = t/thN;
+    plot(ax, x, L, '-', 'Color', P.greens(min(i,size(P.greens,1)),:), 'LineWidth', P.LW);
+    % Tail by EXTRAPOLATION on a window common in rescaled time, not a
+    % window mean: fit L ~ A + B*(t/theta)^(-2/3), take the intercept.
+    w  = x >= 3 & x <= 6.8 & isfinite(L);
+    cf = [ones(nnz(w),1), x(w).^(-2/3)] \ L(w);
+    Ns(i) = N; tails(i) = cf(1);
+end
+plot(ax, xlim(ax), [1 1], ':', 'Color',[0.4 0.4 0.4], 'LineWidth', 2);
+xlabel(ax,'rescaled time $t/\theta_N$','Interpreter','latex','FontSize',P.FSZ+8);
+ylabel(ax,'survival correction $\lambda^{(N)}_{\rm tot}(t)$', ...
+       'Interpreter','latex','FontSize',P.FSZ+8);
+set(ax,'TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
+pos = get(ax,'Position');
+axI = axes(f,'Position',[pos(1)+0.50*pos(3), pos(2)+0.52*pos(4), 0.40*pos(3), 0.36*pos(4)]);
+hold(axI,'on'); box(axI,'off')
+Ng = logspace(log10(2), log10(200), 300);
+plot(axI, Ng, linf(Ng), '--', 'Color',[0.2 0.2 0.2], 'LineWidth', 2.5);
+plot(axI, Ns, tails, 'o', 'MarkerSize', 10, 'LineWidth', 2.5, ...
+     'MarkerEdgeColor',[0.03 0.28 0.15], 'MarkerFaceColor','w');
+set(axI,'XScale','log','TickDir','out','TickLabelInterpreter','latex','FontSize',P.FSZ-10);
+xlabel(axI,'$N$','Interpreter','latex','FontSize',P.FSZ-4);
+ylabel(axI,'tail $L_\infty$','Interpreter','latex','FontSize',P.FSZ-4);
+ylim(axI,[0 1.05]);
+fprintf('  panel A: tails / L_inf ='); fprintf(' %.3f', tails./linf(Ns)); fprintf('\n');
+%  POST: tails approach L_inf FROM BELOW, tightening with N. The draft's
+%        "from above, exceeding by ~20%%" was a window-mean artifact.
+export(f, 'fig3A', P);
+end
 
-    kn = find(x1n >= thA, 1);   kb = find(x1b >= thA, 1);
-    if isempty(kn) || isempty(kb) || kb <= kn, continue; end
-    if any(x2n(1:kn) >= thA) || any(x2b(1:kb) >= thA), continue; end
-    if x2n(kn) < 0.15, continue; end                 % naive kick must clear
-    delay = tA(kb) - tA(kn);
-    if delay < 0.5 || delay > 4.0 || tA(kn) < 1.0 || tA(kb) > 9, continue; end
+%% ==================== B: first-departure density ========================
+function T1 = panelB(P)
+% One figure, two stacked axes sharing an x-axis: top naive, bottom Bayesian
+% at the self-consistent alpha = L_inf(N). Independent y-limits (the naive
+% densities are taller); a single y-label spans both tiles.
+f  = figure('Units','centimeters','Position',[1 1 P.FIG(1) P.FIG(2)*1.10],'Color','w');
+tl = tiledlayout(f, 2, 1, 'TileSpacing','tight','Padding','compact');
 
-    % TWO separations exist here and they compete. Between AGENTS (x1 against
-    % x2) is incidental; within a PAIR (a rule against its discounted twin) is
-    % the point. The old score MAXIMISED the between-agent term, which is what
-    % drove agent 2 down to -2.7, set a y-range of 5.7 units, and left the
-    % within-pair gap at under 9% of the axis. Now the between-agent spread is
-    % targeted at a moderate value rather than maximised, and the depth of the
-    % excursion is penalised outright, since it is what sets the y-range.
-    sep   = mean(abs(x1n(1:kn) - x2n(1:kn)));
-    depth = -min([x1b(1:kb); x2b(1:kb)]);
-    if depth > 2.0, continue; end
-    score = -abs(delay - 1.5) - 0.3*abs(sep - 1.0) - 0.6*depth;
-    if score > bestscore
-        bestscore = score;
-        best = struct('kn',kn,'kb',kb,'x1n',x1n,'x2n',x2n,'x1b',x1b,'x2b',x2b);
+t  = linspace(1e-3, 1.3*P.theta1, 6000)';   % plotting grid
+% The mean is a separate, LONGER integral. At theta_1 = 3.57 the N = 1
+% survival still carries ~5% of its mass past t = 8, so computing T1 by
+% trapz on the plotting grid truncates it (3.376 against the exact 3.5677 =
+% theta by Wald). N > 1 is unaffected, since the minimum concentrates at
+% small t -- which is why this stayed hidden at the old theta_1 = 1.136.
+tI = linspace(1e-4, 60*P.theta1, 200000)';  % integration grid
+NB = [1 10 100];  T1 = nan(2,numel(NB));
+axB = gobjects(1,2);
+for j = 1:2
+    axB(j) = nexttile(tl); hold(axB(j),'on'); box(axB(j),'off')
+    for i = 1:numel(NB)
+        N = NB(i);
+        % Lower tile uses the model's own self-consistent rate at each N,
+        % alpha = L_inf(N), not a single fitted value: panel A establishes
+        % that the Bayesian rate varies with N, and alpha_hat is empirical,
+        % belonging to Fig. 5. L_inf(1) = 0, so N = 1 coincides in both tiles.
+        if j == 1, a = 0; else, a = linf(N); end
+        Sv = surv(t, 1-a, P.theta1);  fv = igd(t, 1-a, P.theta1);
+        plot(axB(j), t, N*fv.*Sv.^(N-1), '-', 'Color', P.blues(i,:), 'LineWidth', P.LW);
+        T1(j,i) = trapz(tI, surv(tI, 1-a, P.theta1).^N);
+    end
+    set(axB(j),'TickDir','out','TickLabelInterpreter','latex', ...
+               'FontSize',P.FSZ-2,'LineWidth',2);
+    % x-limit scales with the threshold: at theta_1 = 3.57 the N = 1 mean is
+    % 3.57, so the old [0 1] window cut off the naive tile entirely.
+    axis(axB(j),[0 1.2*P.theta1 0 2.2]);
+end
+set(axB(1),'XTickLabel',[]);                       % shared x-axis
+% MODEL UNITS, not seconds. The model carries no timescale of its own: the
+% only place seconds appear is Fig. 5, where the Pacher latencies set one.
+% The caption states the axis is truncated at 1.2*theta_1, so the label must
+% not promise a physical unit the abscissa does not carry.
+xlabel(tl,'time $t$','Interpreter','latex','FontSize',P.FSZ+6);
+ylabel(tl,'first-departure density, $H=1$','Interpreter','latex','FontSize',P.FSZ+6);
+
+%  POST: top tile is alpha = 0 (naive), bottom is alpha = L_inf(N)
+%        (Bayesian); line darkness is N = 1, 10, 100. No legend by design --
+%        annotate in assembly.
+fprintf('  panel B: mean T_(1) naive    ='); fprintf(' %7.3f', T1(1,:)); fprintf('\n');
+fprintf('           mean T_(1) Bayesian ='); fprintf(' %7.3f', T1(2,:)); fprintf('\n');
+export(f, 'fig3B', P);
+end
+
+%% ======================= C: Pareto frontier =============================
+function [front, NC] = panelC(P)
+f  = figure('Units','centimeters','Position',[1 1 P.FIG],'Color','w');
+ax = axes(f); hold(ax,'on'); box(ax,'off')
+th_g = linspace(0.2, 3.5*P.theta1, 200);  a_g = linspace(0, 0.95, 35);  NC = [1 5 20];
+tC = linspace(1e-4, 400, 150000)';  front = cell(1,numel(NC));
+for i = 1:numel(NC)
+    N = NC(i); Pts = zeros(0,2);
+    for a = a_g
+        if N == 1 && a > 0, continue, end     % alpha is inert for a lone agent
+        for th = th_g
+            Pts(end+1,:) = [trapz(tC, surv(tC,1-a,th).^N), ...
+                            1-(1-exp(-(1+a)*th))^N]; %#ok<AGROW>
+        end
+    end
+    Pts = sortrows(Pts,1); keep = false(size(Pts,1),1); best = inf;
+    for r = 1:size(Pts,1)
+        if Pts(r,2) < best, keep(r) = true; best = Pts(r,2); end
+    end
+    front{i} = Pts(keep,:);
+    plot(ax, front{i}(:,1), front{i}(:,2), '-', 'Color', P.blues(i,:), 'LineWidth', P.LW);
+end
+set(ax,'YScale','log','TickDir','out','TickLabelInterpreter','latex', ...
+       'FontSize',P.FSZ,'LineWidth',2);
+xlabel(ax,'detection time $\bar T_{(1)}$','Interpreter','latex','FontSize',P.FSZ+8);
+ylabel(ax,'group false alarm rate $q_N$','Interpreter','latex','FontSize',P.FSZ+8);
+xlim(ax,[0 2.5*P.theta1]); ylim(ax,[1e-4 1]);
+legend(ax, arrayfun(@(n) sprintf('$N=%d$',n), NC, 'uni',0), ...
+       'Interpreter','latex','Box','off','Location','northeast','FontSize',P.FSZ-6);
+fprintf('  panel C: frontier points ='); fprintf(' %d', cellfun(@(c) size(c,1), front)); fprintf('\n');
+export(f, 'fig3C', P);
+end
+
+%% =================== D: required discounting rate =======================
+function D = panelD(P)
+f  = figure('Units','centimeters','Position',[1 1 P.FIG(1)+2 P.FIG(2)],'Color','w');
+ax = axes(f); hold(ax,'on'); box(ax,'off')
+q_g = logspace(log10(1e-3), log10(0.5), 420);
+K_g = logspace(log10(1),    log10(100), 380);
+[Q,K] = meshgrid(q_g, K_g);
+A = areq(K,Q); Aplot = A; Aplot(A > 1 | A < 0) = NaN;
+pc = pcolor(ax, q_g, K_g, Aplot);
+set(pc,'EdgeColor','none','FaceColor','texturemap')
+colormap(ax, plasma()); caxis(ax,[0 1])
+Kmax = log(1-q_g)./log(1-q_g.^2);                    % exact alpha = 1 boundary
+patch(ax, [q_g fliplr(q_g)], [Kmax 1e4*ones(size(q_g))], ...
+      [0.88 0.88 0.88], 'EdgeColor','none','FaceAlpha',0.92)
+plot(ax, q_g, Kmax, '-', 'Color',[0.15 0.15 0.15], 'LineWidth', P.LW);
+[c1,h1] = contour(ax, q_g, K_g, A, 0.1:0.1:0.9, 'LineColor',[1 1 1], 'LineWidth', 1.6);
+clabel(c1, h1, 'Color',[1 1 1], 'FontSize', 18, 'LabelSpacing', 600)
+q_linf = arrayfun(@(k) q_at_alpha(k, linf(k)), K_g);
+plot(ax, q_linf, K_g, '-', 'Color',[0.10 0.45 0.85], 'LineWidth', P.LW);
+% observed operating point, with the Mhat-propagated interval on q_1
+plot(ax, P.q1_CI, [P.K_obs P.K_obs], '-', 'Color',[0.35 0.10 0.55], 'LineWidth', P.LW);
+plot(ax, P.q1_obs, P.K_obs, 'o', 'MarkerFaceColor',[0.35 0.10 0.55], ...
+     'MarkerEdgeColor','w', 'MarkerSize', 16, 'LineWidth', 2.5);
+set(ax,'XScale','log','YScale','log','TickDir','out', ...
+       'TickLabelInterpreter','latex','FontSize',P.FSZ,'LineWidth',2);
+xlim(ax,[q_g(1) q_g(end)]); ylim(ax,[1 100]);
+set(ax,'XTick',[1e-3 1e-2 1e-1 0.5],'XTickLabel',{'0.001','0.01','0.1','0.5'});
+set(ax,'YTick',[1 2 5 10 20 50 100],'YTickLabel',{'1','2','5','10','20','50','100'});
+xlabel(ax,'false alarm rate held constant, $q_1$','Interpreter','latex','FontSize',P.FSZ+8);
+ylabel(ax,'attended neighbors $K$','Interpreter','latex','FontSize',P.FSZ+8);
+cb = colorbar(ax); cb.Label.String = 'required $\alpha$';
+cb.Label.Interpreter = 'latex'; cb.Label.FontSize = P.FSZ; cb.TickLabelInterpreter = 'latex';
+%  POST labels:
+%    grey wedge  "discounting alone insufficient: threshold must rise"
+%                (NOT "inadmissible" -- the rate is attainable, just not at
+%                fixed theta)
+%    black curve "$K_{\max}\simeq 1/q_1$"
+%    blue curve  "$\alpha_{\rm req} = L_\infty(K)$", with the reading
+%                glossed either side: left, individually Bayesian discounting
+%                already suffices; right, it does not.
+%    purple dot  the sulphur molly operating point, $(q_1, K) = (0.028, 7)$,
+%                bar the interval propagated from Mhat. It sits to the RIGHT
+%                of the blue curve, so the required rate exceeds what
+%                individually Bayesian updating supplies -- the same
+%                conclusion the empirical fit reaches, from the false alarm
+%                rate alone.
+fprintf(['  panel D: alpha_req(K=%d, q_1=%.4f) = %.3f  vs  L_inf(%d) = %.3f\n' ...
+         '           K_max(obs) = %.2f\n'], ...
+        P.K_obs, P.q1_obs, areq(P.K_obs,P.q1_obs), P.K_obs, linf(P.K_obs), ...
+        log(1-P.q1_obs)/log(1-P.q1_obs^2));
+% the two endpoints of the drawn interval bar, for the caption
+fprintf('           q_1 interval from Mhat = [%.4f, %.4f]\n', P.q1_CI(1), P.q1_CI(2));
+export(f, 'fig3D', P);
+D = struct('q',q_g,'K',K_g,'alpha_req',A,'Kmax_of_q',Kmax,'q_at_Linf',q_linf);
+end
+
+%% ============ threshold scaling worked example (no figure) ==============
+function S = report_scaling(P)
+% Sec. threshold_scaling quotes: at K = 7 the naive rule needs theta_K =
+% 5.51 where a discounter at alpha_hat needs 2.83, and the group detection
+% time at MATCHED false alarm rate falls from 1.79 to 0.96 at N = 20. The
+% thresholds were already right; the two times had no console line behind
+% them, which is what this block supplies. Same primitives as panel B, same
+% long integration grid, so no separate recomputation.
+K = P.K_obs; a = P.alpha_hat; Nrep = [7 20];
+thK = [(P.theta1 + log(K))/1, (P.theta1 + log(K))/(1 + a)];   % naive, discounted
+tI  = linspace(1e-4, 4000, 400000)';
+S = struct('K',K,'alpha',a,'theta_K',thK,'N',Nrep,'T1',nan(2,numel(Nrep)));
+for j = 1:2
+    for i = 1:numel(Nrep)
+        S.T1(j,i) = trapz(tI, surv(tI, 1-(j-1)*a, thK(j)).^Nrep(i));
     end
 end
-if isempty(best)
-    error(['Panel A: no legible realisation found. alphaA = %.2f may be too ' ...
-           'large -- the naive path must reach thA + alphaA*t under drift -1. ' ...
-           'Lower alphaA, raise the seed count, or relax the depth cap.'], alphaA);
+fprintf('  scaling: K = %d, alpha_hat = %.4f\n', K, a);
+fprintf('           theta_K naive = %.4f   discounted = %.4f\n', thK(1), thK(2));
+for i = 1:numel(Nrep)
+    fprintf('           N = %3d:  T_(1) naive = %.4f   discounted = %.4f   (%.2fx faster)\n', ...
+            Nrep(i), S.T1(1,i), S.T1(2,i), S.T1(1,i)/S.T1(2,i));
+end
+%  POST: these are at MATCHED group false alarm rate, since theta_K is set by
+%        the pinning relation in each case. Contrast with panel B, which
+%        holds theta fixed instead and therefore shows discounting COSTING
+%        speed. Both statements are in the text and they are not in conflict.
 end
 
-kn = best.kn;  kb = best.kb;
-tn = tA(kn);   tb = tA(kb);
-kapN = thA;                      % naive kick
-kapB = thA + alphaA*tb;          % heuristic kick, grows with departure time
-xEnd = min(TA, tb + 1.2);
-
-fA = figure('Units','centimeters','Position',[1 1 st.FIG],'Color','w');
-axA = axes(fA); hold(axA,'on');
-yline(axA, thA, '-', 'Color',[0 0 0], 'LineWidth',st.LWt);
-
-% Shade each rule against its discounted twin. A filled area reads at a glance
-% where two nearly parallel lines do not, and it is the same device Fig. 1C
-% uses for the discounted silence.
-fill(axA, [tA(1:kn); flipud(tA(1:kn))], ...
-          [best.x1b(1:kn); flipud(best.x1n(1:kn))], ...
-     [0.55 0.72 0.55], 'FaceAlpha', 0.30, 'EdgeColor','none');
-fill(axA, [tA(1:kn); flipud(tA(1:kn))], ...
-          [best.x2b(1:kn); flipud(best.x2n(1:kn))], ...
-     [0.55 0.72 0.55], 'FaceAlpha', 0.30, 'EdgeColor','none');
-
-plot(axA, tA(1:kn), best.x1n(1:kn), '-', 'Color',st.col_naiv, 'LineWidth',st.LW);
-plot(axA, tA(1:kn), best.x2n(1:kn), '-', 'Color',[0.78 0.78 0.78], 'LineWidth',st.LW);
-plot(axA, [tn tn], [best.x2n(kn) best.x2n(kn)+kapN], ':', ...
-     'Color',[0.78 0.78 0.78], 'LineWidth',st.LWt);
-plot(axA, tn, thA, 'o', 'MarkerSize',12, 'MarkerFaceColor',st.col_naiv, ...
-     'MarkerEdgeColor',st.col_naiv);
-
-plot(axA, tA(1:kb), best.x1b(1:kb), '-', 'Color',st.col_bay, 'LineWidth',st.LW);
-plot(axA, tA(1:kb), best.x2b(1:kb), '-', 'Color',[0.55 0.80 0.62], 'LineWidth',st.LW);
-plot(axA, [tb tb], [best.x2b(kb) best.x2b(kb)+kapB], ':', ...
-     'Color',[0.55 0.80 0.62], 'LineWidth',st.LWt);
-plot(axA, tb, thA, 'o', 'MarkerSize',12, 'MarkerFaceColor',st.col_bay, ...
-     'MarkerEdgeColor',st.col_bay);
-
-yb = thA + 0.32;
-plot(axA, [tn tb], [yb yb], '-', 'Color',[0.4 0.4 0.4], 'LineWidth',1.5);
-plot(axA, [tn tn], [thA yb], ':', 'Color',[0.5 0.5 0.5], 'LineWidth',1);
-plot(axA, [tb tb], [thA yb], ':', 'Color',[0.5 0.5 0.5], 'LineWidth',1);
-text(axA, 0.5*(tn+tb), yb+0.16, 'delay', 'Interpreter','latex', ...
-     'FontSize',st.FSZ-10, 'Color',[0.35 0.35 0.35], 'HorizontalAlignment','center');
-text(axA, 0.15, thA-0.45, 'naive',       'Interpreter','latex', ...
-     'FontSize',st.FSZ-10, 'Color',st.col_naiv);
-text(axA, 0.15, thA-1.05, 'discounting', 'Interpreter','latex', ...
-     'FontSize',st.FSZ-10, 'Color',st.col_bay);
-
-apply_axes(axA, 'time $t$', 'belief $\xi(t)$');
-xlim(axA,[0 xEnd]);
-ylim(axA,[min([best.x1b(1:kb); best.x2b(1:kb)])-0.4, thA+0.9]);
-export_panel(fA, 'fig3A', outdir);
-yr = diff(ylim(axA));
-fprintf(['  Panel A: alphaA = %.2f, naive trigger t=%.2f, discounting trigger ' ...
-         't=%.2f (delay %.2f)\n'], alphaA, tn, tb, tb-tn);
-fprintf('           within-pair gap at crossing %.2f, y-range %.2f (%.0f%% of axis)\n', ...
-        alphaA*tb, yr, 100*alphaA*tb/yr);
-end
-
-%% ---- B, C: naive cascade observables vs kick size ----------------------
-if want('B') || want('C')
-theta_BC = [1 2 3];
-shades   = [0.70 0.70 0.70; 0.40 0.40 0.40; 0 0 0];
-kap_rel  = linspace(0.02, 4, 60);
-kap_mc   = [0.25 0.75 1.5 2.3 3.2];
-
-fB = figure('Units','centimeters','Position',[3 1 st.FIG],'Color','w');
-axB = axes(fB); hold(axB,'on');
-fC = figure('Units','centimeters','Position',[5 1 st.FIG],'Color','w');
-axC = axes(fC); hold(axC,'on');
-
-for j = 1:numel(theta_BC)
-    th = theta_BC(j);  q = exp(-th);
-    ratio = zeros(size(kap_rel));  delay = zeros(size(kap_rel));
-    for i = 1:numel(kap_rel)
-        [qc, ct] = dyad_cascade_analytic(th, kap_rel(i)*th);
-        ratio(i) = qc/q^2;   delay(i) = ct/th;
-    end
-    plot(axB, kap_rel, ratio, '-', 'Color',shades(j,:), 'LineWidth',st.LW);
-    plot(axC, kap_rel, delay, '-', 'Color',shades(j,:), 'LineWidth',st.LW);
-
-    rmc = zeros(size(kap_mc));  dmc = zeros(size(kap_mc));
-    for i = 1:numel(kap_mc)
-        [rmc(i), dmc(i)] = dyad_mc(th, kap_mc(i)*th, 1e4, 1e-3, 30*th);
-    end
-    plot(axB, kap_mc, rmc/q^2, 'o', 'Color',shades(j,:), 'MarkerFaceColor','w', ...
-         'MarkerSize',9, 'LineWidth',2);
-    plot(axC, kap_mc, dmc/th,  'o', 'Color',shades(j,:), 'MarkerFaceColor','w', ...
-         'MarkerSize',9, 'LineWidth',2);
-end
-yline(axB, 1, ':', 'Color',[0.85 0.3 0.3], 'LineWidth',st.LWt);
-text(axB, 2.4, 1.25, 'independent', 'Interpreter','latex', ...
-     'FontSize',st.FSZ-12,'Color',[0.85 0.3 0.3]);
-set(axB,'YScale','log');
-apply_axes(axB, 'jump $\kappa/\theta$', 'cascade ratio $q_{\rm dyad}/q^2$');
-xlim(axB,[0 4]);
-export_panel(fB, 'fig3B', outdir);
-apply_axes(axC, 'jump $\kappa/\theta$', '$[\bar{T}_{(2)}-\bar{T}_{(1)}]/\theta$');
-xlim(axC,[0 4]);  ylim(axC,[0 0.6]);
-export_panel(fC, 'fig3C', outdir);
-end
-
-%% ---- D: the survival correction ----------------------------------------
-if want('D')
-h1s = ddm_ig(t,  1, theta1).h;
-h0s = ddm_ig(t, -1, theta1).h;
-gap = max(h1s - h0s, 0);
-
-show = t <= TSHOW;
-
-fD = figure('Units','centimeters','Position',[7 1 st.FIG],'Color','w');
-axD = axes(fD); hold(axD,'on');
-plot(axD, t(show), gap(show),    '--', 'Color',st.col_ref, 'LineWidth',st.LWt);
-plot(axD, t(show), lambda(show), '-',  'Color',st.col_bay, 'LineWidth',st.LW);
-yline(axD, alpha_dyad, ':', 'Color',st.col_bay, 'LineWidth',st.LWt);
-text(axD, 0.62*TSHOW, alpha_dyad-0.035, sprintf('$L_\\infty(2) = %.2f$', alpha_dyad), ...
-     'Interpreter','latex','FontSize',st.FSZ-10,'Color',st.col_bay);
-text(axD, 0.10*TSHOW, 0.55, 'single agent', 'Interpreter','latex', ...
-     'FontSize',st.FSZ-12,'Color',st.col_ref);
-apply_axes(axD, 'time $t$', 'survival correction $\lambda(t)$');
-% ylim must contain the single-agent gap
-xlim(axD,[0 TSHOW]);  ylim(axD,[0 max(1.15*max(gap(t > 0.3)), 0.45)]);
-export_panel(fD, 'fig3D', outdir);
-
-% console diagnostic only: the tail is not resolved well enough to plot
-tail = t >= 3.0*theta1 & t <= TSHOW;
-dl   = lambda(tail) - alpha_dyad;
-if all(dl > 0)
-    p = polyfit(log10(t(tail)), log10(dl), 1);
-    fprintf('  Panel D: excess above L_inf falls from %.4f at t=%.1f to %.4f at t=%.1f\n', ...
-            dl(1), t(find(tail,1,'first')), dl(end), t(find(tail,1,'last')));
-    fprintf('           apparent exponent %.3f over %.2f decades (NOT publishable)\n', ...
-            p(1), log10(t(find(tail,1,'last'))/t(find(tail,1,'first'))));
+%% ============================ helpers ===================================
+function export(f, name, P)
+if exist(P.outdir,'dir')
+    exportgraphics(f, fullfile(P.outdir,[name '.pdf']), 'ContentType','vector');
+    exportgraphics(f, fullfile(P.outdir,[name '.png']), 'Resolution',400);
+    fprintf('           wrote %s.pdf / .png\n', name);
 else
-    fprintf(2, '  Panel D: lambda reaches or crosses L_inf inside the window.\n');
-    fprintf(2, '           min(lambda - L_inf) = %.3e. Check the survival floor.\n', min(dl));
+    fprintf('           outdir "%s" not found -- %s not exported\n', P.outdir, name);
 end
 end
 
-%% ---- E: survival functions ---------------------------------------------
-if want('E')
-S1_bay = survival_drift( 1, lambda,     theta1, dt, nt);
-S0_bay = survival_drift(-1, lambda,     theta1, dt, nt);
-S1_heu = survival_drift( 1, alpha_dyad, theta1, dt, nt);
-S0_heu = survival_drift(-1, alpha_dyad, theta1, dt, nt);
-S1_nai = ddm_ig(t,  1, theta1).S;
-S0_nai = ddm_ig(t, -1, theta1).S;
-
-showE = t <= TSHOW_E;
-
-fE = figure('Units','centimeters','Position',[9 1 st.FIG],'Color','w');
-axE = axes(fE); hold(axE,'on');
-plot(axE, t(showE), S1_nai(showE), '-',  'Color',st.col_naiv, 'LineWidth',st.LW);
-plot(axE, t(showE), S0_nai(showE), '--', 'Color',st.col_naiv, 'LineWidth',st.LW);
-plot(axE, t(showE), S1_heu(showE), '-',  'Color',[0.45 0.75 0.55], 'LineWidth',st.LW);
-plot(axE, t(showE), S0_heu(showE), '--', 'Color',[0.45 0.75 0.55], 'LineWidth',st.LW);
-plot(axE, t(showE), S1_bay(showE), '-',  'Color',st.col_bay, 'LineWidth',st.LWt);
-plot(axE, t(showE), S0_bay(showE), '--', 'Color',st.col_bay, 'LineWidth',st.LWt);
-apply_axes(axE, 'time $t$', 'survival $S(t\,|\,H)$');
-xlim(axE,[0 TSHOW_E]);  ylim(axE,[0 1]);
-export_panel(fE, 'fig3E', outdir);
-fprintf('  max |S_bayes - S_heur|: H=1 %.3e, H=0 %.3e\n', ...
-        max(abs(S1_bay-S1_heu)), max(abs(S0_bay-S0_heu)));
+function f = igd(t, mu, th)
+t = t(:); f = zeros(size(t)); ok = t > 0; tt = t(ok);
+f(ok) = th ./ sqrt(4*pi*tt.^3) .* exp(-(th - mu*tt).^2 ./ (4*tt));
 end
 
-%% ---- F: speed-accuracy frontier ----------------------------------------
-%  Three objects, as the caption describes:
-%    naive     alpha = 0, kick kappa = theta
-%    heuristic lower envelope of the (alpha, theta) family
-%    Bayesian  exact fixed point, by direct Monte Carlo -- the analytic
-%              killed-density formula assumes CONSTANT drift and cannot take
-%              the time-varying lambda(t), so MC is the honest route here.
-if want('F')
-DTF = 0.005;  TFAC = 12;  NXF = 2000;
-% Upper bound must exceed the largest theta_B: the Bayesian dyad is SLOWER at
-% matched threshold (the anti-drift delays the second departure), so T_(2) at
-% theta_B = 4.2 overshoots the naive curve's endpoint at theta_N = 4.4 and the
-% offset diagnostic returns NaN for that circle.
-theta_N = unique([linspace(0.8, 5.2, 30), theta1]);
-alpha_N = unique([linspace(0, 0.75, 21), alpha_dyad]);
-NTG = 400;  MINBRANCH = 6;      % 6 kills the right-edge ripple past T ~ 4.2
-NSHOW = 6;                      % branches drawn as the background cloud
-XMAXF = 4.3;
-
-fprintf('  Panel F: naive sweep...\n');
-[qn, Tn] = deal(nan(size(theta_N)));
-for j = 1:numel(theta_N)
-    [qn(j), Tn(j)] = dyad_frontier_heuristic(theta_N(j), 0, DTF, TFAC, NXF);
+function S = surv(t, mu, th)
+t = t(:); S = ones(size(t)); ok = t > 0; tt = t(ok);
+S(ok) = ncdf((th - mu*tt)./sqrt(2*tt)) - exp(mu*th).*ncdf((-th - mu*tt)./sqrt(2*tt));
+S = min(max(S,0),1);
 end
 
-fprintf('  Panel F: heuristic (alpha,theta) family, %d alpha x %d theta...\n', ...
-        numel(alpha_N), numel(theta_N));
-Hq = nan(numel(theta_N), numel(alpha_N));
-HT = nan(numel(theta_N), numel(alpha_N));
-for ia = 1:numel(alpha_N)
-    for j = 1:numel(theta_N)
-        [Hq(j,ia), HT(j,ia)] = dyad_frontier_heuristic(theta_N(j), alpha_N(ia), ...
-                                                       DTF, TFAC, NXF);
-    end
-    fprintf('    alpha=%.4f done\n', alpha_N(ia));
+function p = ncdf(x)
+% Local standard normal CDF. Every other script in the repo carries one of
+% these; this file was the last caller of the Statistics Toolbox normcdf,
+% which meant the figure pipeline was not toolbox-free as the README claims.
+p = 0.5*erfc(-x./sqrt(2));
 end
 
-% envelope: interpolate log10(q) per branch on its own support, then min
-T2g = linspace(min(HT(:)), max(HT(:)), NTG);
-Q   = nan(NTG, numel(alpha_N));
-for ia = 1:numel(alpha_N)
-    [t2, o] = sort(HT(:,ia));  lq = log10(Hq(o,ia));
-    g = isfinite(t2) & isfinite(lq);
-    if nnz(g) < 4, continue; end
-    in = T2g >= min(t2(g)) & T2g <= max(t2(g));
-    Q(in,ia) = interp1(t2(g), lq(g), T2g(in), 'pchip');
-end
-keep = sum(~isnan(Q), 2) >= MINBRANCH;
-eT   = T2g(keep);
-eQ   = 10.^cummin(min(Q(keep,:), [], 2, 'omitnan'));   % Pareto, left to right
-
-fprintf('  Panel F: envelope over T_(2) in [%.2f, %.2f], %d points, >= %d branches\n', ...
-        eT(1), eT(end), numel(eT), MINBRANCH);
-
-% which alpha attains the envelope, and by how much it beats naive
-[~, iwin] = min(Q(keep,:), [], 2, 'omitnan');
-fprintf('  Panel F: minimising alpha in [%.4f, %.4f]; alpha=0 optimal on %.0f%% of the range\n', ...
-        min(alpha_N(iwin)), max(alpha_N(iwin)), 100*mean(alpha_N(iwin) == 0));
-qn_at_eT = interp1(Tn, qn, eT, 'pchip', NaN);
-gapfrac  = eQ(:)./qn_at_eT(:);
-fin = isfinite(gapfrac);
-fprintf('  Panel F: envelope/naive ratio in [%.4f, %.4f] -- tuning gains at most %.2f%%\n', ...
-        min(gapfrac(fin)), max(gapfrac(fin)), 100*(1-min(gapfrac(fin))));
-
-fprintf('  Panel F: exact Bayesian dyad by Monte Carlo...\n');
-theta_B = unique([1.2 1.8 2.4 3.0 3.6 4.2, theta1]);
-cacheF  = fullfile(outdir, 'fig3F_mc.mat');
-haveF   = false;
-if USE_CACHE_F && exist(cacheF,'file')
-    C = load(cacheF);
-    % 'bgk' in the cache marks the Broadie-Glasserman-Kou-corrected run. An
-    % older cache lacks it and is rejected, since the uncorrected q_MC is
-    % biased low against the analytic naive curve it is plotted with.
-    haveF = isfield(C,'theta_B') && isequal(C.theta_B, theta_B) && ...
-            isfield(C,'dt') && C.dt == dt && isfield(C,'bgk') && C.bgk;
-    if haveF
-        qB = C.qB;  TB = C.TB;
-        fprintf('    loaded cached MC from %s\n', cacheF);
-    end
-end
-if ~haveF
-    [qB, TB] = deal(nan(size(theta_B)));
-    for j = 1:numel(theta_B)
-        th  = theta_B(j);
-        Tm  = 10*th;
-        [~, lamj] = solve_lambda_fixedpoint(2, th, dt, Tm, struct('tol',3e-4));
-        % Length comes FROM the solver. round(Tm/dt)+1 disagrees by one whenever
-        % 10*theta is not a whole number of dt steps, which no entry in the
-        % original theta_B triggered but theta_1 = 3.5678 does: 35.678/0.005 is
-        % 7135.6, so round gives 7137 against the solver's 7136 and
-        % survival_drift rejects the mismatch.
-        ntB = numel(lamj);
-        S1j = max(survival_drift( 1, lamj, th, dt, ntB), 1e-12);
-        S0j = max(survival_drift(-1, lamj, th, dt, ntB), 1e-12);
-        Jtj = th - log(S1j./S0j);              % exact Bayesian kick, Eq. (S12)
-        [qB(j), TB(j)] = bayes_dyad_mc(th, lamj, Jtj, dt, ntB, 4e4, 100+j);
-        fprintf('    theta=%.2f: q_MC=%.3e  T2_MC=%.3f\n', th, qB(j), TB(j));
-    end
-    bgk = true;  save(cacheF, 'qB', 'TB', 'theta_B', 'dt', 'bgk');
+function L = linf(N)
+k = N - 1;
+L = ((k + 2) - 2*sqrt(k + 1)) ./ max(k, eps);
+L(N <= 1) = 0;
 end
 
-% how far the MC circles sit from the naive curve, in units of MC error
-qn_at_TB = interp1(Tn, qn, TB, 'pchip', NaN);
-se_q     = sqrt(qB.*(1-qB)/4e4);
-off      = (qB - qn_at_TB)./se_q;
-fprintf('  Panel F: circle offset from naive, in MC standard errors:');
-fprintf(' %.1f', off);  fprintf('\n');
-fprintf('           same offset as a fraction of q:                ');
-fprintf(' %+.1f%%', 100*(qB - qn_at_TB)./qn_at_TB);  fprintf('\n');
-% Sigma units and relative size answer different questions. At q ~ 1e-2 with
-% 4e4 trials, five standard errors is a ~25% difference in cascade rate: the
-% separation is statistically RESOLVED. Whether it is NEGLIGIBLE is the
-% relative line, and that is the one the caption should quote. A positive
-% offset means the exact Bayesian dyad is WORSE than naive at matched response
-% time, which is the paper's own point that individually optimal inference does
-% not optimize the collective order-statistic objective -- but state it only if
-% the sign survives the BGK correction, which pushes q_MC up and so widens it.
-
-% MATCHED-THRESHOLD comparison, which is a different claim from the frontier.
-% Sec. dyad says the Bayesian rule "cuts q_dyad by roughly a third" at fixed
-% theta; the frontier compares at matched T_(2) instead.
-jB = find(abs(theta_B - theta1) < 1e-9, 1);
-jN = find(abs(theta_N - theta1) < 1e-9, 1);
-if ~isempty(jB) && ~isempty(jN)
-    fprintf(['  Panel F: at MATCHED theta = %.4f, naive q_dyad = %.4e, ' ...
-             'Bayesian %.4e\n           ratio %.3f (a reduction of %.1f%%)\n'], ...
-            theta1, qn(jN), qB(jB), qB(jB)/qn(jN), 100*(1 - qB(jB)/qn(jN)));
+function a = areq(K, q)
+a = log(1 ./ (1 - (1-q).^(1./K))) ./ log(1./q) - 1;
+a(K == 1) = 0;
 end
 
-% display cloud: pick branches FROM the grid (an independent list misses it)
-is = unique(round(linspace(1, numel(alpha_N), NSHOW)));
-
-fF = figure('Units','centimeters','Position',[11 1 st.FIG],'Color','w');
-axF = axes(fF); hold(axF,'on');
-plot(axF, HT(:,is), Hq(:,is), '.', 'Color',[0.90 0.94 0.91], 'MarkerSize',6);
-hH = plot(axF, eT, eQ, '-',  'Color',[0.45 0.75 0.55], 'LineWidth',st.LW);
-hN = plot(axF, Tn, qn, '--', 'Color',st.col_naiv, 'LineWidth',st.LW+2);
-hB = plot(axF, TB, qB, 'o',  'Color',st.col_bay, 'MarkerFaceColor','w', ...
-          'MarkerSize',11, 'LineWidth',2.5);
-set(axF,'YScale','log');
-apply_axes(axF, 'collective response time $\bar{T}_{(2)}$', ...
-                'cascade rate $q_{\rm dyad}$');
-xlim(axF,[0 XMAXF]);  ylim(axF,[1e-3 1]);
-legend(axF, [hN hH hB], {'naive','heuristic','Bayesian'}, ...
-       'Interpreter','latex', 'FontSize',st.FSZ-12, ...
-       'Location','northeast', 'Box','off');
-export_panel(fF, 'fig3F', outdir);
+function q = q_at_alpha(K, a)
+if K <= 1 || a <= 0, q = NaN; return, end
+g = @(lq) areq(K, exp(lq)) - a;
+lo = log(1e-14); hi = log(0.5 - 1e-9);
+if g(lo)*g(hi) > 0, q = NaN; return, end
+q = exp(fzero(g, [lo hi]));
 end
 
-fprintf('Fig 3 done (panels %s). alpha_dyad = L_inf(2) = %.4f\n', PANELS, alpha_dyad);
-
-%% ---- local: naive dyad Monte Carlo (panels B, C) -----------------------
-function [qc, ct] = dyad_mc(theta, kappa, ntr, dtmc, Tmax)
-    ns = round(Tmax/dtmc);  sd = sqrt(2*dtmc);
-    out = [0 0];
-    for H = [0 1]
-        mu = 2*H - 1;
-        x = zeros(ntr,2);  hit = nan(ntr,2);  kicked = false(ntr,1);
-        for k = 1:ns
-            live = isnan(hit);
-            if ~any(live(:)), break; end
-            x(live) = x(live) + mu*dtmc + sd*randn(nnz(live),1);
-            just = live & (x >= theta);
-            hit(just) = k*dtmc;
-            one = (sum(~isnan(hit),2) == 1) & ~kicked;
-            if any(one)
-                s1 = one & isnan(hit(:,1));  x(s1,1) = x(s1,1) + kappa;
-                s2 = one & isnan(hit(:,2));  x(s2,2) = x(s2,2) + kappa;
-                kicked(one) = true;
-            end
-        end
-        if H == 0
-            out(1) = mean(all(~isnan(hit),2));
-        else
-            d = max(hit,[],2) - min(hit,[],2);
-            out(2) = mean(d(~isnan(d)));
-        end
-    end
-    qc = out(1);  ct = out(2);
-end
-
-%% ---- local: exact Bayesian dyad Monte Carlo (panel F) ------------------
-function [q_casc, T2] = bayes_dyad_mc(theta, lambda, Jt, dt, nt, ntr, seed)
-% Each agent drifts at mu_H - lambda(t) WHILE ITS NEIGHBOUR IS SILENT. On the
-% neighbour's departure at t_k it receives the exact Bayesian kick
-% Jt(k) = theta - Lambda^surv(t_k) and its anti-drift switches OFF. Shares no
-% code with the Volterra quadrature, so agreement tests the solver.
-%
-% DISCRETE-BARRIER BIAS. Euler-Maruyama monitors the barrier only at grid
-% points and misses excursions between them, so it UNDERSTATES the crossing
-% rate. Uncorrected, this MC is compared against an analytic naive curve that
-% has no such bias, which is exactly the error found in make_figS2. The
-% Broadie-Glasserman-Kou shift moves the simulated barrier inward by
-% 0.5826*sigma*sqrt(dt) (0.058 at dt = 5e-3, about 1.6% of theta_1). The
-% correction pushes q_MC UP, so any excess of the Bayesian circles over the
-% naive curve is a LOWER bound before it is applied.
-    rng(seed);
-    lambda = lambda(:);  Jt = Jt(:);
-    sq  = sqrt(2*dt);
-    thr = theta - 0.5826*sqrt(2)*sqrt(dt);   % BGK-corrected crossing level
-    out = [0 0];
-    for H = [0 1]
-        mu = 2*H - 1;
-        x1 = zeros(ntr,1);  x2 = zeros(ntr,1);
-        d1 = false(ntr,1);  d2 = false(ntr,1);
-        k1 = false(ntr,1);  k2 = false(ntr,1);
-        t1 = nan(ntr,1);    t2 = nan(ntr,1);
-        for k = 1:nt-1
-            lam = lambda(k);
-            a1 = ~d1;  a2 = ~d2;
-            if any(a1)
-                dr = mu - lam*double(~d2(a1) & ~k1(a1));
-                x1(a1) = x1(a1) + dr*dt + sq*randn(nnz(a1),1);
-            end
-            if any(a2)
-                dr = mu - lam*double(~d1(a2) & ~k2(a2));
-                x2(a2) = x2(a2) + dr*dt + sq*randn(nnz(a2),1);
-            end
-            c1 = ~d1 & x1 >= thr;   c2 = ~d2 & x2 >= thr;
-            kk1 = c1 & ~d2 & ~k2;  x2(kk1) = x2(kk1) + Jt(k);  k2(kk1) = true;
-            kk2 = c2 & ~d1 & ~k1;  x1(kk2) = x1(kk2) + Jt(k);  k1(kk2) = true;
-            n1 = ~d1 & x1 >= thr;  n2 = ~d2 & x2 >= thr;
-            t1(n1) = k*dt;  t2(n2) = k*dt;
-            d1 = d1 | x1 >= thr;   d2 = d2 | x2 >= thr;
-            if all(d1 & d2), break; end
-        end
-        if H == 0
-            out(1) = mean(d1 & d2);
-        else
-            both = ~isnan(t1) & ~isnan(t2);
-            out(2) = mean(max(t1(both), t2(both)));
-        end
-    end
-    q_casc = out(1);  T2 = out(2);
+function m = plasma()
+m = [0.050 0.030 0.528; 0.179 0.016 0.592; 0.281 0.012 0.632;
+     0.367 0.012 0.659; 0.445 0.026 0.672; 0.519 0.052 0.674;
+     0.586 0.089 0.661; 0.647 0.130 0.638; 0.700 0.171 0.609;
+     0.749 0.215 0.576; 0.792 0.260 0.540; 0.832 0.308 0.502;
+     0.866 0.358 0.462; 0.897 0.411 0.422; 0.922 0.467 0.381;
+     0.943 0.526 0.341; 0.958 0.589 0.302; 0.968 0.654 0.266;
+     0.973 0.722 0.234; 0.975 0.793 0.210; 0.973 0.864 0.199;
+     0.970 0.936 0.212];
 end

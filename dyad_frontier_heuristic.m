@@ -120,3 +120,4 @@ else
     p = min(max(exp(mu*(th - x0)), 0), 1);
 end
 end
+

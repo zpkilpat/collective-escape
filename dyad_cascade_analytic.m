@@ -39,3 +39,4 @@ C = (theta - kappa - t).*normcdf(a) + s2.*normpdf(a) ...
 f1 = ddm_ig(t, 1, theta).f;
 cascade_time = 2 * trapz(t, f1 .* max(C,0));
 end
+

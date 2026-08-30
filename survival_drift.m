@@ -26,3 +26,4 @@ bdot  = -drift;
 
 [f, S, h] = fpt_moving(b, bdot, t);
 end
+

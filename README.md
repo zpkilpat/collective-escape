@@ -1,10 +1,9 @@
-# Social Discounting Enables Fast and Reliable Collective Escape
+# Social discounting enables fast and reliable collective escape
 
-Code to reproduce every figure panel in the paper and its supplementary
-materials.
+Code to reproduce every figure panel in the paper and its SI Appendix.
 
-Kilpatrick, Z. P. (2026). *Social Discounting Enables Fast and Reliable
-Collective Escape.* Archived at Zenodo, DOI `PLACEHOLDER`.
+Kilpatrick, Z. P. (2026). *Social discounting enables fast and reliable
+collective escape.*
 
 ---
 
@@ -15,7 +14,9 @@ run_all
 ```
 
 Panels are written to `output/` as PDF and PNG. Multi-panel figures are
-assembled externally, so panel letters are not drawn here.
+assembled externally, so panel letters are not drawn here. `PANELMAP.md` says
+which script writes which panel — worth reading first, because several scripts
+do not emit the letter their name suggests.
 
 Runtime is dominated by one step, the `N = 100` fixed point, which takes
 twenty-five damped iterations of two `O(nt^2)` Volterra sweeps each. Expect
@@ -26,7 +27,7 @@ loads the solver struct that the first complete run saves to
 MATLAB only, no toolboxes:
 
 ```matlab
-[~, p] = matlab.codetools.requiredFilesAndProducts('make_fig5.m');  p.Name
+[~, p] = matlab.codetools.requiredFilesAndProducts('make_fig4.m');  p.Name
 ```
 
 returns `MATLAB` alone. Local functions inside scripts require R2016b or
@@ -63,149 +64,105 @@ in video frames at 25 fps, not seconds.
 ### Figure scripts
 
 One per figure, each writing its own panels. `make_fig1`, `make_fig2`,
-`make_fig3` and `make_figS1` are scripts; the rest are functions returning a
+`make_figS1` and `make_figS3` are scripts; the rest are functions returning a
 struct of what they computed.
 
-| Script | Figure | Needs |
+| Script | Writes | Needs |
 |---|---|---|
-| `make_fig1` | Fig. 1B, C | nothing |
-| `make_fig2` | Fig. 2 | nothing |
-| `make_fig3` | Fig. 3 | nothing |
-| `make_fig4` | Fig. 4 | `bayes` from `solve_bayes` |
-| `make_fig5` | Fig. 5 | Data S1 |
-| `make_figS1` | Fig. S1 | nothing |
-| `make_figS2` | Fig. S2 | `bayes` from `solve_bayes` |
-| `make_figS3` | Fig. S3 | nothing |
-| `make_figS4` | Fig. S4 | Data S1 |
-| `make_figS5` | Fig. S5 | Data S1 |
-| `make_figS6` | Fig. S6 | Data S1 and S2 |
+| `make_fig1` | Fig. 1B, C, D | nothing |
+| `make_fig2` | Fig. 2A–D **and Fig. S2C** | nothing |
+| `make_fig3` | Fig. 3A–D | `bayes` from `solve_bayes` |
+| `make_fig4` | Fig. 4A–D | Data S1 |
+| `make_figS1` | Fig. S1A, B | nothing |
+| `make_figS2` | Fig. S2A, B | `bayes` from `solve_bayes` |
+| `make_figS3` | Fig. S3A, B | nothing |
+| `make_figS4` | Fig. S4A–C | Data S1 |
+| `make_figS5` | Fig. S5A–C | Data S1 |
+| `make_figS6` | Fig. S6A–C | nothing (simulation study) |
+| `make_figS7` | Fig. S7A–C | Data S1 and S2 |
 
-`make_fig4` and `make_figS2` share one solve over
-`N = 2, 5, 10, 20, 40, 100` at `theta_1 = 3.5678`. Called with no argument,
-`make_figS2` performs that solve itself.
+### Solvers and model code
 
-### Shared primitives
-
-Called by the figure scripts, not run directly.
-
-| File | Does |
+| File | Role |
 |---|---|
-| `solve_bayes` | Bayesian survival-correction fixed point for an N-agent group |
-| `solve_lambda_fixedpoint` | The same closure, as used by Fig. 3 |
-| `fpt_moving` | Durbin-Buonocore moving-boundary first-passage solver |
-| `survival_drift` | Survival correction on a given drift, over `fpt_moving` |
-| `calib_pool` | Monte Carlo calibration of the pooling count, cached in a persistent |
-| `read_pacher` | Data S1 and S2 loader, builds the recording-by-bout cluster key |
-| `alpha_hat` | Eq. (13), discounting rate from two response rates at a pooling count |
-| `linf_ceiling` | Closed-form saturation ceiling `L_inf(N)` |
-| `fit_pool_mle` | Scale-free likelihood cross-check on the pooling count |
-| `dyad_cascade_analytic` | Closed-form dyad cascade probability and delay, Eqs. (S8) and (S11) |
-| `dyad_frontier_heuristic` | Dyad speed-accuracy frontier over the constant-alpha family |
-| `ddm_ig` | Inverse-Gaussian first-passage density, survival and hazard |
-| `igrnd` | Inverse-Gaussian variates, Michael-Schucany-Haas |
-| `wilson` | Wilson score interval |
-| `paper_style`, `apply_axes`, `export_panel` | Plotting helpers for the script-style figures |
+| `fpt_moving.m` | Durbin–Buonocore Volterra sweep, moving boundary |
+| `solve_bayes.m` | damped fixed point for `lambda^(N)`, N-agent |
+| `solve_lambda_fixedpoint.m` | dyad fixed point used by `make_fig2` |
+| `survival_drift.m` | survival under a time-varying drift |
+| `ddm_ig.m` | inverse-Gaussian first-passage density, survival, hazard |
+| `dyad_cascade_analytic.m` | closed-form cascade integrals G and C |
+| `dyad_frontier_heuristic.m` | heuristic (α, θ) family for the frontier |
+| `validate_dyad_mc.m` | Monte Carlo cross-check of the dyad observables |
 
-### Validation, run by hand
+### Empirical primitives
 
-`validate_dyad_mc.m` checks the dyad observables against an independent
-Euler-Maruyama simulation sharing no code with the Volterra quadrature. It is
-the Monte Carlo validation named in the data-availability statement, and the
-closed-form agreement it reproduces is quoted in the supplement. `run_all`
-does not call it and it draws nothing by default, so run it directly.
+| File | Role |
+|---|---|
+| `read_pacher.m` | shared Data S1 / S2 loader, `file|bout` cluster key |
+| `calib_pool.m` | self-consistent M calibration at `theta_1(M)` |
+| `alpha_hat.m` | Eq. (3), α̂ from two pooled rates |
+| `fit_pool_mle.m` | scale-free likelihood cross-check on M |
+| `linf_ceiling.m` | closed-form `L_inf(N)` |
+| `igrnd.m` | inverse-Gaussian sampler (Michael–Schucany–Haas) |
+| `wilson.m` | Wilson score interval |
+
+### Style
+
+`paper_style.m`, `apply_axes.m`, `export_panel.m`.
 
 ---
 
-## Reproducing the numbers
+## Expected console output
 
-`run_all` prints checks as it goes. The ones worth watching:
+A clean run reproduces these. Any drift means something upstream moved.
 
 ```
-cluster key: 73 clusters, 47 attack, 26 flyby
-TP = 0.7175, q = 0.3210, stat = 3.928 -> Mhat = 13.5, alpha = 0.9489
-bootstrap: M in [8.82, 29.40], alpha in [0.906, 0.982]
-           4000/4000 valid, P(alpha > L_inf) = 1.0000, min excess = 0.2043
+solve_bayes tails      0.1636 0.3661 0.5005 0.6151 0.7098 0.8077
+  against L_inf(N)     0.1716 0.3820 0.5195 0.6345 0.7269 0.8182
+  iterations           12 10 10 13 17 25
+
+Data S1 cluster key    73 clusters, 47 attack, 26 flyby
+rates                  TP = 0.7175   q = 0.3210   n_timed = 125
+latency                mean 4.9184 s   lambda_IG 19.3194   ratio 3.9280
+identification         Mhat 13.5241   alpha-hat 0.9489
+                       q_1 0.0282     theta_1 3.5678     K_max 35.93
+bootstrap (4000)       Mci [8.825, 29.403]   alphaci [0.906, 0.982]
+                       pOver 1.0000
 ```
 
-The cluster count is a guard, not a diagnostic. Clusters are keyed on the
-recording *file* combined with `bout_id`, since the bout index restarts within
-each recording; keying on the recording *location* instead collapses 73
-clusters to 31 with six carrying flybys, and every clustered interval in the
-paper rests on that key. Both loaders assert it. If it prints anything but
-73/47/26, stop.
+**Three distinct gaps, all correct, not interchangeable.** `0.376` is
+α̂ − L∞(M̂) at the point estimate; `0.260` is the minimum over the admissible
+(M, K) wedge, attained on K = M; `0.204` is the minimum over the 4000
+bootstrap replicates.
 
-Three quantities in the paper are all called "the gap" and are not
-interchangeable:
-
-| Value | Meaning |
-|---|---|
-| 0.376 | `alpha_hat - L_inf(M)` at the point estimate |
-| 0.260 | minimum over the admissible wedge `K <= M`, attained on `K = M` |
-| 0.204 | minimum over the 4000 bootstrap replicates |
-
-Bootstrap intervals are reproducible. All three resamples share
-`seed = 20260811` and 4000 replicates, and the seed is applied immediately
-before the resampling loop rather than at the top of the file, since
-`calib_pool` advances the random stream enormously on a cold cache.
-
----
-
-## Design notes
-
-**One first-passage primitive.** `fpt_moving.m` accepts handles or vectors and
-is the only Volterra sweep in the repo. `survival_drift` and both fixed-point
-solvers route through it, so their self-tests exercise the same code every
-figure uses. The kernel sign convention is the thing to leave alone: a
-constant boundary cannot validate it, since the kernel vanishes identically
-there for `s > 0`, so the linear moving boundary is what pins the sign.
-
-**Shared primitives are single-source.** `linf_ceiling`, `igrnd`, `wilson` and
-`alpha_hat` live in one file apiece and are called everywhere.
-
-**Illustrative thresholds in the expository figures.** `make_fig1` and
-`make_fig3` set their own thresholds rather than the fitted `theta_1`, since
-both exist to show mechanism at a scale where individual crossings are
-visible. The captions state the values used, and no number in the paper is
-read off those panels. Only `make_figS1` needed the fitted anchor, because its
-hump scaling runs through `theta_N`.
-
-**Small helpers left duplicated on purpose.** `igd`/`igpdf`, `ncdf`,
-`quantile_local`, `irls_logit`, the shape statistic, `assert_key`, and the
-per-script export boilerplate. MATLAB's one-public-function-per-file rule
-makes factoring these out a net loss in navigability. The two `assert_key`
-copies differ only in naming the loader each one guards.
+**Seed convention.** `rng(seed)` is applied immediately before the bootstrap
+call, never at the top of a script. `calib_pool` draws 2e6 samples per grid
+point on a cold cache and advances the stream enormously, so a seed set at the
+top does not align across files.
 
 ---
 
 ## Known inconsistencies
 
-Documented rather than fixed. The figures are verified as they stand.
+Left in deliberately, documented rather than fixed, because changing them
+risks moving panels that currently reproduce.
 
-**Two style systems.** `make_fig1`, `make_fig2`, `make_fig3` and `make_figS1`
-use `paper_style` with `apply_axes` and `export_panel`; the rest carry an
-inline `P` struct with a local `export`. Both produce the same house style,
-22 by 19 cm with LaTeX interpreters throughout.
-
-**Two Data S1 loaders.** `make_fig5` parses the CSV itself; everything else
-calls `read_pacher`. Both assert the cluster key independently. The trap
-either one must avoid is the timing subset: `t_first` is non-empty on 23
-flybys as well as on the attacks, so the timing analysis selects attacks only
-and the correct count is 125, not 148.
-
-**Two fixed-point iterations.** `solve_lambda_fixedpoint` serves Fig. 3;
-`solve_bayes` serves Fig. 4 and Fig. S2. They differ in damping and in their
-late-time survival floor, and agree on the saturation tail to about 0.3
-percent.
-
-**Discretization.** The time step is `Tmax/nt` with `nt = 4000` fixed while
-`Tmax` grows with `N`, so the dyad has the coarsest grid. Doubling `nt` moves
-the `N = 2` tail from 0.1636 to 0.1638 and leaves `N = 100` unchanged at
-0.8077, which is why the paper quotes those recoveries to one significant
-figure.
+- **Two style systems.** `paper_style`/`apply_axes`/`export_panel` for the
+  script-style figures; an inline `P` struct for the function-style ones.
+- **Two fixed-point iterations.** `solve_lambda_fixedpoint` (dyad, used by
+  `make_fig2`) and `solve_bayes` (N-agent). They agree to about 0.3%; the
+  paper's numbers come from `solve_bayes`.
+- **Illustrative thresholds.** `make_fig1` runs panels B and C at
+  θ = 3.5678 and D at θ = 1, 2, 3; `make_fig2` panels A and B at θ = 1, 2, 3.
+  These are stated in the captions and no reported number is read off them.
+- **Discretization.** Panels are generated at `nt = 4000`. Halving the step
+  moves the N = 2 tail from 0.1636 to 0.1638 and leaves N = 100 unchanged, so
+  the shortfall against `L_inf` is quoted to one significant figure.
+- `make_fig4` takes `(csv, opts)` where `opts` may be an options struct or an
+  output-directory string; `make_figS4`–`S7` take `(csv, outdir)`.
 
 ---
 
 ## License
 
-See `LICENSE`. The Pacher et al. data are not covered by it and are not
-redistributed here.
+MIT. See `LICENSE`.

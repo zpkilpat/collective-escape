@@ -6,7 +6,7 @@ function sol = solve_bayes(N, theta, opts)
 %  that drift; and the correction closes lambda = h_1 - h_0. Solved by damped
 %  fixed-point iteration over the moving-boundary primitive in fpt_moving.
 %
-%  Returns everything make_figS2 and make_figS3 need, so both run without an
+%  Returns everything make_fig3 and make_figS2 need, so both run without an
 %  external solver:
 %     sol.N, sol.theta, sol.t
 %     sol.lam       converged per-neighbor correction
@@ -90,3 +90,4 @@ w = t/th >= 3 & t/th <= 6.8 & isfinite(L);
 if nnz(w) < 5, v = L(end); return; end
 x = t(w)/th;  cf = [ones(nnz(w),1), x.^(-2/3)] \ L(w);  v = cf(1);
 end
+

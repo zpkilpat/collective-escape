@@ -1,6 +1,6 @@
 function D = read_pacher(csvfile, xlsfile)
 %READ_PACHER  Parse Pacher et al. Data S1 (events) and, optionally, Data S2
-%             (shoal structure). Shared by make_figS4/S6/S7 and make_fig5.
+%             (shoal structure). Shared by make_fig4 and make_figS4/S5/S7.
 %
 %  Data S1 is semicolon-delimited with 19 lines of legend and the header on
 %  line 20. Seventeen columns. t_first is in FRAMES at 25 fps and missing

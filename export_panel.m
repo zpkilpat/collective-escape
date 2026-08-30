@@ -6,3 +6,4 @@ exportgraphics(fh, fullfile(outdir,[name '.pdf']), 'ContentType','vector');
 exportgraphics(fh, fullfile(outdir,[name '.png']), 'Resolution',300);
 fprintf('  wrote %s.pdf / .png\n', name);
 end
+

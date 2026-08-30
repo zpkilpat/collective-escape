@@ -1,6 +1,6 @@
-%% MAKE_FIG1  Combining private evidence and social information.
+%% MAKE_FIG1  Combining private and social evidence in collective escape.
 %
-%  Panel A (bird/shoal cartoon) is drawn separately in Illustrator.
+%  Panel A (attack / flyby cartoon) is drawn separately in Illustrator.
 %
 %  B  single-agent DDM sample paths: one H=1 realisation absorbed at theta,
 %     one H=0 realisation drifting away.
@@ -9,8 +9,16 @@
 %     discounting rate alpha, so the vertical gap is exactly alpha*t. One
 %     neighbour departs at T1 and both receive the SAME kick: the naive belief
 %     is carried across theta (false alarm), the discounting belief is not.
+%  D  survival log-likelihood ratio Lambda^surv(t) for theta = 1,2,3, the
+%     negative evidence a still neighbour supplies. Migrated here from the
+%     Science Advances Fig. 2B when the paper went to four main figures.
 %
-%  Self-contained: no .mat dependency.  ZPK 2026
+%  THRESHOLDS. B and C run at theta = 3.5678 and D at theta = 1,2,3. All are
+%  ILLUSTRATIVE: the caption says so, and no number in the paper is read off
+%  this figure.
+%
+%  Self-contained: no solver, no .mat.  ZPK 2026
+
 
 clear; close all; st = paper_style();  outdir = 'output';
 theta = 3.5678;  dt = 0.01;
@@ -78,6 +86,25 @@ export_panel(fC, 'fig1C', outdir);
 fprintf('Fig 1: naive clears theta by %.2f; discounting short by %.2f\n', ...
         xpre_n+kappa-theta, theta-(xpre_b+kappa));
 
+%% ---- D: survival LLR (was SA Fig. 2B) ----------------------------------
+thD_vals = [1 2 3];
+shD = [0.70 0.70 0.70; 0.40 0.40 0.40; 0 0 0];
+tD = (0.01:0.005:6)';
+
+fD = figure('Units','centimeters','Position',[3 1 st.FIG],'Color','w');
+axD = axes(fD); hold(axD,'on');
+yline(axD, 0, ':', 'Color',st.col_ref, 'LineWidth',st.LWt);
+for k = 1:numel(thD_vals)
+    SD1 = ddm_ig(tD,  1, thD_vals(k)).S;
+    SD0 = ddm_ig(tD, -1, thD_vals(k)).S;
+    plot(axD, tD, log(max(SD1,1e-12)./max(SD0,1e-12)), '-', ...
+         'Color',shD(k,:), 'LineWidth',st.LW);
+end
+apply_axes(axD, 'time $t$', 'survival LLR $\Lambda^{\rm surv}(t)$');
+xlim(axD,[0 6]);  ylim(axD,[-8 0.5]);
+export_panel(fD, 'fig1D', outdir);
+
+
 %% ---- local functions ---------------------------------------------------
 function [t, x] = simpath(mu, theta, dt, Tmax)
     n = round(Tmax/dt);  x = zeros(n,1);  t = (0:n-1)'*dt;
@@ -98,3 +125,4 @@ function draw_kick(ax, Tj, xpre, xtop, dt, stub, col, colm, LW, cross_marker)
              'MarkerEdgeColor','k', 'LineWidth',1.4);
     end
 end
+
