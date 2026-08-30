@@ -2,5 +2,12 @@ output/
 *.mat
 *.asv
 .DS_Store
+
+# Pacher et al. data -- NOT redistributed
 sciadv_adt8600_data_s1.csv
 sciadv_adt8600_data_s2.xlsx
+*adt8600*
+
+# local notes, never ship
+RUNORDER.md
+MISSING.md
